@@ -158,6 +158,23 @@ td input.inl{width:118px}
 .opt input.id{flex:0 0 100px;font-family:ui-monospace,monospace;font-size:12px}
 .opt select{padding:4px 6px;border:1px solid var(--line);border-radius:4px;background:var(--bg2)}
 .opt .x{color:var(--fg3)}.opt .x:hover{color:var(--danger)}
+/* 링크 */
+.links{margin-top:14px;font-size:13px;color:var(--fg2)}
+.links h4{margin:10px 0 4px;font-size:12px;font-weight:500;color:var(--fg3)}
+.links button{display:inline-block;margin:0 6px 4px 0;padding:2px 8px;border:1px solid var(--line);border-radius:12px;color:var(--fg)}
+.links button:hover{background:var(--bg2)}
+/* 팔레트 */
+.pal{align-items:flex-start;padding-top:12vh}
+.pal .box{max-height:70vh}
+.pal input.w{border:0;border-bottom:1px solid var(--line);border-radius:10px 10px 0 0;padding:12px 16px;font-size:16px;background:var(--bg)}
+.pal input.w:focus{outline:none}
+.pallist{overflow:auto;padding:6px}
+.pallist button{display:flex;width:100%;text-align:left;padding:7px 10px;border-radius:var(--radius);gap:8px;align-items:center}
+.pallist button[aria-selected=true],.pallist button:hover{background:var(--bg2)}
+.pallist .k{font-size:12px;color:var(--fg3);flex:0 0 auto}
+.pallist .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pallist .sec{font-size:11px;color:var(--fg3);padding:8px 10px 2px}
+.qbadge{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--c-yellow);color:var(--c-yellow-fg)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:var(--radius);font-size:13px;z-index:30;opacity:0;pointer-events:none;transition:opacity .15s}
 .toast.on{opacity:1}
 @media (max-width:640px){
@@ -185,7 +202,9 @@ td input.inl{width:118px}
     <span class="pill" id="pillGroup">그룹 <select id="fGroup"><option value="status">상태</option><option value="label">라벨</option><option value="type">종류</option><option value="folder">폴더</option></select></span>
     <input class="search" id="q" type="search" placeholder="검색" aria-label="검색">
     <span class="sp"></span>
+    <button class="icon" id="btnPalette" title="명령 (Ctrl+K)" aria-label="명령">⌘</button>
     <button class="icon" id="btnReload" title="새로고침" aria-label="새로고침">↻</button>
+    <span class="qbadge" id="qbadge" hidden></span>
     <button class="icon" id="btnSettings" title="설정" aria-label="설정">⚙</button>
   </div>
   <div class="views" id="views"></div>
@@ -214,6 +233,7 @@ td input.inl{width:118px}
     </div>
     <textarea id="pBody" spellcheck="false" aria-label="본문"></textarea>
     <div class="preview" id="pPreview" hidden></div>
+    <div class="links" id="pLinks"></div>
   </div>
   <div class="pf">
     <button class="btn danger" id="pDelete">삭제</button>
@@ -252,6 +272,12 @@ td input.inl{width:118px}
       <div class="optlist" id="optViews"></div>
     </div>
     <div class="row"><button class="btn" id="sCancel">닫기</button><button class="btn primary" id="sSave">저장</button></div>
+  </div>
+</div>
+<div class="modal pal" id="palette">
+  <div class="box">
+    <input class="w" id="palInput" placeholder="노트 검색, 또는 > 명령" autocomplete="off" aria-label="명령 팔레트">
+    <div class="pallist" id="palList" role="listbox"></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -304,6 +330,30 @@ const api={
 };
 const b64enc=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s)));
 const b64dec=b=>new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\n/g,'')),c=>c.charCodeAt(0)));
+const isNetErr=e=>e instanceof TypeError||/Failed to fetch|NetworkError|Load failed/.test(String(e.message));
+const isConflict=e=>/GitHub 409|GitHub 422/.test(String(e.message));
+
+/* ===================== 오프라인 큐 ===================== */
+// 네트워크가 없을 때 쓰기를 쌓아 두고, 연결되면 순서대로 반영한다. 항목: {op:'put'|'del', path, content?, message}
+const queue={
+  list:JSON.parse(localStorage.getItem('brain.queue')||'[]'),
+  save(){localStorage.setItem('brain.queue',JSON.stringify(queue.list));queue.badge();},
+  badge(){const b=$('#qbadge');b.hidden=!queue.list.length;b.textContent=`대기 ${queue.list.length}`;b.title='오프라인에서 저장한 변경. 연결되면 자동 반영';},
+  push(item){const i=queue.list.findIndex(x=>x.path===item.path);if(i>=0)queue.list.splice(i,1);queue.list.push(item);queue.save();},
+  async flush(){
+    if(!queue.list.length||!navigator.onLine||queue.busy)return;queue.busy=true;let ok=0;
+    try{
+      while(queue.list.length){const it=queue.list[0];
+        const cur=await api.file(it.path,true);
+        if(it.op==='put'){const r=await api.put(it.path,it.content,cur?cur.sha:null,it.message);const n=notes.find(x=>x.path===it.path);if(n)n.sha=r.content.sha;}
+        else if(cur)await api.del(it.path,cur.sha,it.message);
+        queue.list.shift();queue.save();ok++;}
+      if(ok)toast(`오프라인 변경 ${ok}건을 반영했습니다`);
+    }catch(e){if(!isNetErr(e))toast('대기 변경 반영 실패: '+e.message,4000);}
+    queue.busy=false;saveCache();
+  }
+};
+window.addEventListener('online',()=>queue.flush());
 
 /* ===================== 마크다운 / 프론트매터 ===================== */
 function parseFM(raw){
@@ -380,8 +430,10 @@ async function load(){
         out.push({path:p,sha:f.sha,raw:f.content,fm,body,title:titleOf(p,body),folder:p.split('/')[0]});done++;}));
       if(need.length>16)$('#main').innerHTML=`<div class="status">불러오는 중… <b>${done}/${need.length}</b></div>`;
     }
-    notes=out;saveCache();fillFolders();restoreControls();render();
+    notes=out;saveCache();fillFolders();restoreControls();render();queue.badge();queue.flush();
   }catch(e){
+    const cache=JSON.parse(localStorage.getItem('brain.cache')||'{}');
+    if(isNetErr(e)&&Object.keys(cache).length){notes=Object.values(cache);fillFolders();restoreControls();render();queue.badge();toast('오프라인 — 마지막으로 받은 내용을 보여줍니다',3000);return;}
     $('#main').innerHTML=`<div class="status">불러오지 못했습니다.<br><b>${esc(e.message)}</b><br><br>저장소 이름, 브랜치, 토큰 권한(Contents 읽기·쓰기)을 확인하세요.</div>`;
   }
 }
@@ -540,9 +592,18 @@ function openNote(n){
   $('#pPath').textContent=n.path;$('#pTitle').value=n.title;
   $('#pStatus').value=n.fm.status||'';$('#pLabel').value=n.fm.label||'';$('#pDue').value=n.fm.due||'';$('#pType').textContent=n.fm.type||'';
   $('#pBody').value=n.body.replace(/^#\s+.*\n?/m,'');$('#pMsg').textContent='';
-  showPreview(false);
+  showPreview(false);renderLinks(n);
   $('#panel').classList.add('open');$('#panel').setAttribute('aria-hidden','false');$('#dim').classList.add('on');
   if(window.innerWidth>640)setTimeout(()=>$('#pBody').focus(),50);
+}
+const linkTargets=n=>[...new Set([...n.body.matchAll(/\[\[([^\]|#]+)/g)].map(m=>m[1].trim()).concat(Array.isArray(n.fm.related)?n.fm.related.map(s=>s.replace(/^\[\[|\]\]$/g,'').split('|')[0].trim()):[]))];
+const findNote=name=>notes.find(x=>x.title===name||x.path.endsWith('/'+name+'.md')||x.path===name+'.md');
+function renderLinks(n){
+  const box=$('#pLinks');box.innerHTML='';
+  const out=linkTargets(n);const back=notes.filter(x=>x!==n&&linkTargets(x).some(t=>findNote(t)===n));
+  const mk=(name,target)=>el('button',{onclick:()=>target?openNote(target):toast('아직 없는 노트입니다')},name+(target?'':' (없음)'));
+  if(out.length){box.append(el('h4',{},'이 노트가 가리키는 곳'));for(const t of out)box.append(mk(t,findNote(t)));}
+  if(back.length){box.append(el('h4',{},'이 노트를 가리키는 노트'));for(const x of back)box.append(mk(x.title,x));}
 }
 function closePanel(){$('#panel').classList.remove('open');$('#panel').setAttribute('aria-hidden','true');$('#dim').classList.remove('on');current=null;}
 function showPreview(on){
@@ -556,16 +617,29 @@ async function saveNote(n,patch,newTitle,newBody,quiet){
   const hasH1=/^#\s+/m.test(n.body)||newTitle!==undefined;
   const raw=buildFM(fm)+(hasH1?`# ${title}\n\n`:'')+body.replace(/^\n+/,'');
   if(current===n)$('#pMsg').textContent='저장 중…';
+  const apply=sha=>{Object.assign(n,{sha,raw,fm,body:(hasH1?`# ${title}\n\n`:'')+body,title});saveCache();if(current===n)$('#pMsg').textContent='';render();};
   try{
     const r=await api.put(n.path,raw,n.sha,`web: ${title}`);
-    Object.assign(n,{sha:r.content.sha,raw,fm,body:(hasH1?`# ${title}\n\n`:'')+body,title});
-    saveCache();if(current===n)$('#pMsg').textContent='';if(!quiet)toast('저장했습니다');render();
-  }catch(e){if(current===n)$('#pMsg').textContent='';toast('저장 실패: '+e.message,4000);render();}
+    apply(r.content.sha);if(!quiet)toast('저장했습니다');
+  }catch(e){
+    if(current===n)$('#pMsg').textContent='';
+    if(isNetErr(e)){queue.push({op:'put',path:n.path,content:raw,message:`web: ${title}`});apply(n.sha);toast('오프라인 — 연결되면 반영됩니다');return;}
+    if(isConflict(e)){
+      // 다른 기기가 먼저 바꿈. 최신본을 받아 와서 sha를 맞추고, 사용자의 내용은 유지한 채 다시 저장하게 한다.
+      try{const f=await api.file(n.path);n.sha=f.sha;const p=parseFM(f.content);
+        if(current===n){toast('다른 기기에서 먼저 수정된 노트입니다. 다시 저장하면 지금 내용으로 덮어씁니다',5000);}
+        else{Object.assign(n,{raw:f.content,fm:p.fm,body:p.body,title:titleOf(n.path,p.body)});saveCache();render();toast('다른 기기 변경을 받아왔습니다. 다시 시도하세요',4000);}
+      }catch{toast('저장 실패: '+e.message,4000);}
+      return;
+    }
+    toast('저장 실패: '+e.message,4000);render();
+  }
 }
 $('#pSave').onclick=()=>{if(!current)return;saveNote(current,{status:$('#pStatus').value,label:$('#pLabel').value,due:$('#pDue').value},$('#pTitle').value.trim()||current.title,$('#pBody').value);};
 $('#pDelete').onclick=async()=>{if(!current||!confirm(`"${current.title}" 노트를 삭제할까요?`))return;
-  try{await api.del(current.path,current.sha,`web: 삭제 ${current.title}`);notes=notes.filter(x=>x!==current);saveCache();closePanel();fillFolders();render();toast('삭제했습니다');}
-  catch(e){toast('삭제 실패: '+e.message,4000);}};
+  const n=current;const done=()=>{notes=notes.filter(x=>x!==n);saveCache();closePanel();fillFolders();render();};
+  try{await api.del(n.path,n.sha,`web: 삭제 ${n.title}`);done();toast('삭제했습니다');}
+  catch(e){if(isNetErr(e)){queue.push({op:'del',path:n.path,message:`web: 삭제 ${n.title}`});done();toast('오프라인 — 연결되면 삭제됩니다');}else toast('삭제 실패: '+e.message,4000);}};
 $('#pClose').onclick=closePanel;$('#dim').onclick=closePanel;
 $('#pToggle').onclick=()=>showPreview($('#pPreview').hidden);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&current)closePanel();if((e.ctrlKey||e.metaKey)&&e.key==='s'&&current){e.preventDefault();$('#pSave').click();}});
@@ -578,13 +652,28 @@ $('#quick').onsubmit=async e=>{
   if(notes.some(n=>n.path===path))path=path.replace(/\.md$/,`-${Date.now().toString(36)}.md`);
   const fm={type:'inbox',created:d};const raw=buildFM(fm)+text+'\n';
   $('#quickBtn').disabled=true;
-  try{
-    const r=await api.put(path,raw,null,`web: ${first.slice(0,40)}`);
-    notes.unshift({path,sha:r.content.sha,raw,fm,body:text+'\n',title:titleOf(path,text),folder:'00_Inbox'});
-    saveCache();$('#quickText').value='';fillFolders();render();toast('Inbox에 저장했습니다');
-  }catch(err){toast('저장 실패: '+err.message,4000);}
+  const msg=`web: ${first.slice(0,40)}`;
+  const add=sha=>{notes.unshift({path,sha,raw,fm,body:text+'\n',title:titleOf(path,text),folder:'00_Inbox'});saveCache();$('#quickText').value='';fillFolders();render();};
+  try{const r=await api.put(path,raw,null,msg);add(r.content.sha);toast('Inbox에 저장했습니다');}
+  catch(err){if(isNetErr(err)){queue.push({op:'put',path,content:raw,message:msg});add(null);toast('오프라인 — 연결되면 반영됩니다');}else toast('저장 실패: '+err.message,4000);}
   $('#quickBtn').disabled=false;
 };
+
+/* ===================== 템플릿으로 새 노트 ===================== */
+const TEMPLATE_OF={'10_Projects':'Project','20_Areas':'Area','30_Resources':'Resource','40_Notes':'Permanent','50_MOC':'MOC'};
+async function newFromTemplate(folder){
+  const title=prompt(`${folder.replace(/^\d+_/,'')}에 새 노트 — 제목`);if(!title)return;
+  const path=`${folder}/${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return;}
+  let raw;
+  try{const t=await api.file(`_templates/${TEMPLATE_OF[folder]}.md`,true);
+    raw=t?t.content.replace(/<%\s*tp\.date\.now\([^)]*\)\s*%>/g,today()).replace(/<%\s*tp\.file\.title\s*%>/g,title).replace(/<%[\s\S]*?%>/g,''):null;}
+  catch{raw=null;}
+  if(!raw)raw=buildFM({type:(TEMPLATE_OF[folder]||'note').toLowerCase(),status:'active',created:today(),updated:today()})+`# ${title}\n\n`;
+  const{fm,body}=parseFM(raw);const n={path,sha:null,raw,fm,body,title,folder};
+  try{const r=await api.put(path,raw,null,`web: 새 노트 ${title}`);n.sha=r.content.sha;}
+  catch(e){if(isNetErr(e))queue.push({op:'put',path,content:raw,message:`web: 새 노트 ${title}`});else{toast('생성 실패: '+e.message,4000);return;}}
+  notes.unshift(n);saveCache();fillFolders();render();openNote(n);
+}
 
 /* ===================== 설정 모달 ===================== */
 function optRow(list,o,listEl){
@@ -622,6 +711,41 @@ $('#sSave').onclick=async()=>{
   if(connChanged){localStorage.removeItem('brain.cache');config=draft;await load();if(propsChanged)try{await saveConfig();}catch(e){toast('설정 저장 실패: '+e.message,4000);}return;}
   if(propsChanged){config=draft;try{await saveConfig();toast('설정을 저장했습니다');render();}catch(e){toast('설정 저장 실패: '+e.message,4000);}}
 };
+
+/* ===================== 커맨드 팔레트 ===================== */
+let palItems=[],palIdx=0;
+function palCommands(){
+  const c=[{k:'새 메모',n:'Inbox에 빠른 메모',run:()=>{$('#quickText').focus();}}];
+  for(const[f,t]of Object.entries(TEMPLATE_OF))c.push({k:'새 노트',n:`${f.replace(/^\d+_/,'')} (${t} 템플릿)`,run:()=>newFromTemplate(f)});
+  for(const[v,name]of[['table','표'],['board','보드'],['gallery','갤러리'],['todo','할 일']])c.push({k:'뷰',n:name,run:()=>{state.view=v;render();}});
+  for(const sv of config.views)c.push({k:'저장된 뷰',n:sv.name,run:()=>applyView(sv)});
+  c.push({k:'동작',n:'새로고침 (캐시 비움)',run:()=>{localStorage.removeItem('brain.cache');load();}});
+  c.push({k:'동작',n:'설정',run:()=>openSettings('conn')});
+  return c;
+}
+function openPalette(){$('#palette').classList.add('on');$('#palInput').value='';palRender();setTimeout(()=>$('#palInput').focus(),30);}
+function closePalette(){$('#palette').classList.remove('on');}
+function palRender(){
+  const q=$('#palInput').value.trim();const list=$('#palList');list.innerHTML='';palItems=[];palIdx=0;
+  const cmdMode=q.startsWith('>');const qq=(cmdMode?q.slice(1):q).trim().toLowerCase();
+  if(!cmdMode){
+    const hits=notes.filter(n=>!qq||n.title.toLowerCase().includes(qq)||n.path.toLowerCase().includes(qq)).slice(0,qq?30:8);
+    if(hits.length)list.append(el('div',{class:'sec'},qq?'노트':'최근 노트'));
+    for(const n of hits)palItems.push({label:n.title,k:n.folder.replace(/^\d+_/,''),run:()=>openNote(n)});
+    if(qq&&hits.length<30){list.append(el('div',{class:'sec'},'본문 검색'));
+      for(const n of notes.filter(n=>!hits.includes(n)&&n.body.toLowerCase().includes(qq)).slice(0,10))palItems.push({label:n.title,k:'본문',run:()=>openNote(n)});}
+  }
+  const cmds=palCommands().filter(c=>!qq||(c.k+' '+c.n).toLowerCase().includes(qq));
+  if(cmds.length&&(cmdMode||qq||!palItems.length)){list.append(el('div',{class:'sec'},'명령'));for(const c of cmds)palItems.push({label:c.n,k:c.k,run:c.run});}
+  if(!palItems.length)list.append(el('div',{class:'sec'},'결과 없음'));
+  palItems.forEach((it,i)=>list.append(el('button',{role:'option','aria-selected':i===palIdx?'true':'false',onclick:()=>{closePalette();it.run();},onmousemove:()=>{palIdx=i;palHi();}},el('span',{class:'k'},it.k),el('span',{class:'n'},it.label))));
+}
+function palHi(){$('#palList').querySelectorAll('button').forEach((b,i)=>b.setAttribute('aria-selected',i===palIdx?'true':'false'));$('#palList').querySelector('[aria-selected=true]')?.scrollIntoView({block:'nearest'});}
+$('#palInput').oninput=palRender;
+$('#palInput').onkeydown=e=>{if(e.key==='ArrowDown'){e.preventDefault();palIdx=Math.min(palIdx+1,palItems.length-1);palHi();}else if(e.key==='ArrowUp'){e.preventDefault();palIdx=Math.max(palIdx-1,0);palHi();}else if(e.key==='Enter'){e.preventDefault();const it=palItems[palIdx];if(it){closePalette();it.run();}}else if(e.key==='Escape')closePalette();};
+$('#palette').onclick=e=>{if(e.target===$('#palette'))closePalette();};
+$('#btnPalette').onclick=openPalette;
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#palette').classList.contains('on')?closePalette():openPalette();}});
 
 /* ===================== 컨트롤 ===================== */
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;render();});
