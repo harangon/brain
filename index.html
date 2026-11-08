@@ -252,7 +252,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
 .pallist .k{font-size:12px;color:var(--fg3);flex:0 0 auto}
 .pallist .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pallist .sec{font-size:11px;color:var(--fg3);padding:8px 10px 2px}
-.qbadge{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--c-yellow);color:var(--c-yellow-fg)}
+.qbadge{cursor:pointer;font-size:11px;padding:2px 7px;border-radius:10px;background:var(--c-yellow);color:var(--c-yellow-fg)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:var(--radius);font-size:13px;z-index:30;opacity:0;pointer-events:none;transition:opacity .15s}
 .toast.on{opacity:1}
 @media (max-width:640px){
@@ -409,7 +409,7 @@ function ask(title,{msg='',value='',placeholder='',options=null,ok='확인',dang
     if(options){inp=el('select',{});for(const o of options)inp.append(el('option',{value:o.value},o.label));f.append(inp);}
     else if(value!==null){inp=el('input',{value,placeholder,autocomplete:'off'});f.append(inp);}
     const okb=$('#askOk');okb.textContent=ok;okb.className='btn '+(danger?'danger':'primary');
-    const done=v=>{m.classList.remove('on');$('#askForm').onsubmit=null;$('#askCancel').onclick=null;document.removeEventListener('keydown',esc);res(v);};
+    const done=v=>{m.classList.remove('on');$('#askForm').onsubmit=null;$('#askCancel').onclick=null;document.removeEventListener('keydown',esc,true);res(v);};
     const esc=e=>{if(e.key==='Escape'){e.stopPropagation();done(null);}};
     $('#askForm').onsubmit=e=>{e.preventDefault();done(inp?inp.value:true);};
     $('#askCancel').onclick=()=>done(null);document.addEventListener('keydown',esc,true);
@@ -442,7 +442,7 @@ const api={
   async fileB64(path){const j=await api.req(`/repos/${cfg.repo}/contents/${encodeURI(path)}?ref=${cfg.branch}`,{allow404:true});return j?j.content.replace(/\n/g,''):null;},
   del(path,sha,message){return api.req(`/repos/${cfg.repo}/contents/${encodeURI(path)}`,{method:'DELETE',body:JSON.stringify({message,sha,branch:cfg.branch})});},
 };
-const b64enc=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+const b64enc=s=>{const u=new TextEncoder().encode(s);let b='';for(let i=0;i<u.length;i+=0x8000)b+=String.fromCharCode.apply(null,u.subarray(i,i+0x8000));return btoa(b);};
 const b64dec=b=>new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\n/g,'')),c=>c.charCodeAt(0)));
 const isNetErr=e=>e instanceof TypeError||/Failed to fetch|NetworkError|Load failed/.test(String(e.message));
 const isConflict=e=>/GitHub 409|GitHub 422/.test(String(e.message));
@@ -457,13 +457,22 @@ const queue={
   async flush(){
     if(!queue.list.length||!navigator.onLine||queue.busy)return;queue.busy=true;let ok=0;
     try{
-      while(queue.list.length){const it=queue.list[0];
-        const cur=await api.file(it.path,true);
-        if(it.op==='put'){const r=await api.put(it.path,it.content,cur?cur.sha:null,it.message);const n=notes.find(x=>x.path===it.path);if(n)n.sha=r.content.sha;}
-        else if(cur)await api.del(it.path,cur.sha,it.message);
-        queue.list.shift();queue.save();ok++;}
-      if(ok)toast(`오프라인 변경 ${ok}건을 반영했습니다`);
-    }catch(e){if(!isNetErr(e))toast('대기 변경 반영 실패: '+e.message,4000);}
+      let skipped=0;
+      while(queue.list.length-skipped>0){const it=queue.list[skipped];
+        try{
+          const cur=await api.file(it.path,true);
+          if(it.op==='put'){
+            let path=it.path;
+            if(it.base&&cur&&cur.sha!==it.base){ // 오프라인 동안 다른 기기가 먼저 바꿈 → 덮어쓰지 않고 사본으로
+              path=it.path.replace(/\.md$/,` (오프라인 사본 ${today()}).md`);toast(`${fileTitle(it.path)}: 다른 기기 변경과 겹쳐 사본으로 저장했습니다`,5000);}
+            const r=await api.put(path,it.content,path===it.path&&cur?cur.sha:null,it.message);
+            const n=notes.find(x=>x.path===path);if(n)n.sha=r.content.sha;else{const{fm,body}=parseFM(it.content);notes.unshift({path,sha:r.content.sha,raw:it.content,fm,body,title:titleOf(path,body),folder:path.split('/')[0]});}
+          }else if(cur)await api.del(it.path,cur.sha,it.message);
+          queue.list.splice(skipped,1);queue.save();ok++;
+        }catch(e){if(isNetErr(e))throw e;skipped++;toast(`대기 변경 반영 실패 (${fileTitle(it.path)}): ${e.message}`,5000);}
+      }
+      if(ok){toast(`오프라인 변경 ${ok}건을 반영했습니다`);fillFolders();render();}
+    }catch(e){}
     queue.busy=false;saveCache();
   }
 };
@@ -498,7 +507,11 @@ function buildFM(fm){
     else lines.push(`${k}: ${yq(v)}`);}
   return lines.length?`---\n${lines.join('\n')}\n---\n`:'';
 }
-function titleOf(path,body){const h=body.match(/^#\s+(.+)$/m);if(h)return h[1].trim();return path.split('/').pop().replace(/\.md$/,'');}
+const H1_RE=/^\s*#\s+(.+)\n*/;   // 본문 맨 앞의 H1만 (뒤따르는 빈 줄 포함)
+const h1Of=body=>{const m=body.match(H1_RE);return m?m[1].trim():'';};
+const stripH1=body=>body.replace(H1_RE,'');
+const fileTitle=path=>path.split('/').pop().replace(/\.md$/,'');
+function titleOf(path,body){return h1Of(body)||fileTitle(path);}
 function slug(s){return s.trim().replace(/[\\/:*?"<>|#\[\]]/g,'').replace(/\s+/g,'-').slice(0,60)||'메모';}
 function mdToHtml(md){
   let h=esc(md);
@@ -556,6 +569,7 @@ async function load(){
         out.push({path:p,sha:f.sha,raw:f.content,fm,body,title:titleOf(p,body),folder:p.split('/')[0]});done++;}));
       if(need.length>16)$('#main').innerHTML=`<div class="status">불러오는 중… <b>${done}/${need.length}</b></div>`;
     }
+    for(const it of queue.list){if(it.op==='put'&&!out.some(n=>n.path===it.path)&&cache[it.path])out.push(cache[it.path]);}
     notes=out;saveCache();fillFolders();restoreControls();render();queue.badge();queue.flush();
   }catch(e){
     const cache=JSON.parse(localStorage.getItem('brain.cache')||'{}');
@@ -578,7 +592,8 @@ function renderViews(){
   for(const sv of config.views)v.append(el('button',{'aria-pressed':state.saved===sv.id?'true':'false',onclick:()=>applyView(sv)},sv.name));
   v.append(el('button',{class:'save',onclick:saveCurrentView},'+ 현재 뷰 저장'));
 }
-function applyView(sv){
+async function applyView(sv){
+  if(sv&&state.view==='docs'&&sv.view!=='docs'&&current&&!await guardDirty())return;
   if(sv){Object.assign(state,{view:sv.view,folder:sv.folder||'',status:sv.status||'',label:sv.label||'',group:sv.group||'status',sort:sv.sort||'updated:-1',q:sv.q||'',saved:sv.id});}
   else Object.assign(state,{folder:'',status:'',label:'',q:'',saved:''});
   restoreControls();saveState();render();
@@ -654,7 +669,8 @@ function inlineProp(n,pr){
   const inp=el('input',{type:pr.type==='date'?'date':pr.type==='number'?'number':'text',class:'inl',value:v??'','aria-label':pr.name,onclick:e=>e.stopPropagation(),onchange:e=>save(pr.type==='number'&&e.target.value!==''?Number(e.target.value):e.target.value)});
   if(pr.type==='text')inp.style.maxWidth='160px';return inp;
 }
-function dueEl(n){if(!n.fm.due)return'';const late=n.fm.due<today()&&n.fm.status!=='done';return el('span',{class:'due'+(late?' late':'')},n.fm.due);}
+const isLate=n=>!!n.fm.due&&n.fm.due<today()&&!['done','archived'].includes(n.fm.status);
+function dueEl(n){if(!n.fm.due)return'';const late=isLate(n);return el('span',{class:'due'+(late?' late':'')},n.fm.due);}
 function inlineSelect(n,key,list){
   const cur=n.fm[key]||'';const o=optOf(list,cur);
   const s=el('select',{class:'inl'+(cur?' c-'+(o?o.color:'gray'):' empty'),'aria-label':key,onclick:e=>e.stopPropagation(),onchange:async e=>{await saveNote(n,{[key]:e.target.value});}});
@@ -663,7 +679,7 @@ function inlineSelect(n,key,list){
   s.value=cur;return s;
 }
 function inlineDate(n){
-  const late=n.fm.due&&n.fm.due<today()&&n.fm.status!=='done';
+  const late=isLate(n);
   const inp=el('input',{type:'date',class:'inl'+(late?' due late':''),value:n.fm.due||'','aria-label':'마감',onclick:e=>e.stopPropagation(),onchange:async e=>{await saveNote(n,{due:e.target.value});}});
   if(n.fm.due)return inp;
   const b=el('button',{class:'inl empty',onclick:e=>{e.stopPropagation();b.replaceWith(inp);inp.focus();inp.showPicker?.();}},'—');
@@ -734,7 +750,7 @@ function renderBoard(v,m){
 function renderGallery(v,m){
   const gal=el('div',{class:'gallery'});
   for(const n of v){
-    const body=n.body.replace(/^#\s+.*$/m,'').replace(/<!--[\s\S]*?-->/g,'')
+    const body=stripH1(n.body).replace(/<!--[\s\S]*?-->/g,'')
       .replace(/^#{1,6}\s+/gm,'').replace(/^- \[([ xX])\] /gm,(_,c)=>c.trim()?'☑ ':'☐ ').replace(/^- /gm,'• ')
       .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g,'$1').replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\n{3,}/g,'\n\n').trim();
     const lo=labelOpt(labelsOf(n)[0]);
@@ -809,7 +825,7 @@ function renderDocs(m){
     const h=el('h4',{},f.replace(/^\d+_/,'')+(list.length?` ${list.length}`:''));
     if(TEMPLATE_OF[f]||f==='00_Inbox')h.append(el('button',{title:'새 노트',onclick:()=>f==='00_Inbox'?$('#quickText').focus():newFromTemplate(f)},'+'));
     tree.append(h);
-    for(const n of list)tree.append(el('button',{class:'tn','aria-current':current===n?'true':'false',onclick:()=>{openNote(n);wrap.classList.add('m-edit');}},n.title));}
+    for(const n of list){const sub=n.path.split('/').slice(1,-1).join('/');tree.append(el('button',{class:'tn','aria-current':current===n?'true':'false',onclick:()=>{openNote(n);wrap.classList.add('m-edit');}},sub?el('small',{style:'color:var(--fg3);margin-right:4px'},sub+'/'):'',n.title));}}
   const editor=el('div',{class:'editor'});
   wrap.append(tree,editor);m.append(wrap);docsEl=wrap;
   dockPanel(editor);
@@ -817,16 +833,19 @@ function renderDocs(m){
   else if(window.innerWidth<=640)wrap.classList.add('m-edit');
 }
 function dockPanel(editor){const p=$('#panel');p.classList.add('docked');editor.append(p);if(current){p.classList.add('open');p.setAttribute('aria-hidden','false');}$('#dim').classList.remove('on');}
-function undockPanel(){const p=$('#panel');if(!p.classList.contains('docked'))return;p.classList.remove('docked','open');p.setAttribute('aria-hidden','true');document.body.append(p);docsEl=null;}
+function undockPanel(){const p=$('#panel');if(!p.classList.contains('docked'))return;p.classList.remove('docked','open');p.setAttribute('aria-hidden','true');document.body.append(p);docsEl=null;current=null;}
+/* 뷰 전환: 문서 탭의 편집기에 저장 안 한 내용이 있으면 먼저 묻는다 */
+async function switchView(v,extra){if(state.view==='docs'&&v!=='docs'&&current&&!await guardDirty())return;if(extra)extra();state.view=v;render();}
 
 async function completeTodo(n,lineIdx){
   const lines=n.body.split('\n');const ln=lines[lineIdx];const m=ln.match(TODO_RE);if(!m)return;
   lines[lineIdx]=`${m[1]}- [x] ${m[3]} ✅ ${today()}`;
-  await saveNote(n,{},undefined,lines.join('\n').replace(/^#\s+.*\n?/m,''),true);
+  await saveNote(n,{},undefined,stripH1(lines.join('\n')),true);
 }
 
 /* ===================== 패널 ===================== */
-function openNote(n){
+async function openNote(n){
+  if(current&&current!==n&&!await guardDirty())return;
   current=n;
   $('#pPath').textContent=n.path;$('#pTitle').value=n.title;
   const ps=$('#pStatus');[...ps.options].filter(o=>o.dataset.extra).forEach(o=>o.remove());
@@ -835,7 +854,7 @@ function openNote(n){
   const lb=$('#pLabel');lb.innerHTML='';const cur=new Set(labelsOf(n));
   for(const o of [...config.labels,...[...cur].filter(l=>!config.labels.some(x=>x.id===l)).map(l=>({id:l,name:l+' (설정에 없음)',color:'gray'}))]){const t=tagEl(o);t.setAttribute('role','button');t.setAttribute('aria-pressed',cur.has(o.id)?'true':'false');t.onclick=()=>t.setAttribute('aria-pressed',t.getAttribute('aria-pressed')==='true'?'false':'true');lb.append(t);}
   renderPanelProps(n);renderChecklist(n.body);
-  $('#pBody').value=n.body.replace(/^#\s+.*\n?/m,'');$('#pMsg').textContent='';
+  $('#pBody').value=stripH1(n.body);$('#pMsg').textContent='';
   showPreview(false);renderLinks(n);
   const p=$('#panel');p.classList.add('open');p.setAttribute('aria-hidden','false');
   if(p.classList.contains('docked')){p.querySelector('.editor .empty, .empty')?.remove();docsEl?.querySelectorAll('.tree .tn').forEach(b=>b.setAttribute('aria-current',b.textContent===n.title?'true':'false'));}
@@ -851,7 +870,11 @@ function renderLinks(n){
   if(out.length){box.append(el('h4',{},'이 노트가 가리키는 곳'));for(const t of out)box.append(mk(t,findNote(t)));}
   if(back.length){box.append(el('h4',{},'이 노트를 가리키는 노트'));for(const x of back)box.append(mk(x.title,x));}
 }
-function closePanel(){
+function isDirty(){if(!current)return false;if($('#pTitle').value.trim()!==current.title)return true;if($('#pBody').value!==stripH1(current.body))return true;
+  const pp=panelPatch();return ['status','due'].some(k=>(pp[k]||'')!==(current.fm[k]||''))||JSON.stringify(labelsOf({fm:{label:pp.label}}))!==JSON.stringify(labelsOf(current));}
+async function guardDirty(){if(!isDirty())return true;return confirmAsk('저장하지 않은 변경이 있습니다',`"${current.title}" — 저장하지 않고 넘어갈까요?`,'저장 안 함');}
+async function closePanel(){
+  if(!await guardDirty())return;
   const p=$('#panel');
   if(p.classList.contains('docked')){current=null;docsEl?.classList.remove('m-edit');docsEl?.querySelectorAll('.tree .tn').forEach(b=>b.setAttribute('aria-current','false'));
     if(window.innerWidth>640){p.classList.remove('open');p.setAttribute('aria-hidden','true');p.parentElement?.append(el('div',{class:'empty'},'왼쪽에서 노트를 고르세요'));}return;}
@@ -867,17 +890,17 @@ function showPreview(on){
 }
 async function saveNote(n,patch,newTitle,newBody,quiet){
   const fm={...n.fm,...patch};const onlyOrder=Object.keys(patch).length===1&&'order'in patch&&newTitle===undefined&&newBody===undefined;if(!onlyOrder)fm.updated=today();
-  const title=newTitle??n.title;const body=newBody??n.body.replace(/^#\s+.*\n?/m,'');
-  const hasH1=/^#\s+/m.test(n.body)||newTitle!==undefined;
+  const title=newTitle??n.title;const body=newBody??stripH1(n.body);
+  const hasH1=!!h1Of(n.body)||(newTitle!==undefined&&newTitle!==n.title);
   const raw=buildFM(fm)+(hasH1?`# ${title}\n\n`:'')+body.replace(/^\n+/,'');
   if(current===n)$('#pMsg').textContent='저장 중…';
-  const apply=sha=>{Object.assign(n,{sha,raw,fm,body:(hasH1?`# ${title}\n\n`:'')+body,title});saveCache();if(current===n)$('#pMsg').textContent='';render();};
+  const apply=sha=>{Object.assign(n,{sha,raw,fm,body:(hasH1?`# ${title}\n\n`:'')+body,title:hasH1?title:fileTitle(n.path)});saveCache();if(current===n)$('#pMsg').textContent='';render();};
   try{
     const r=await api.put(n.path,raw,n.sha,`web: ${title}`);
     apply(r.content.sha);if(!quiet)toast('저장했습니다');
   }catch(e){
     if(current===n)$('#pMsg').textContent='';
-    if(isNetErr(e)){queue.push({op:'put',path:n.path,content:raw,message:`web: ${title}`});apply(n.sha);toast('오프라인 — 연결되면 반영됩니다');return;}
+    if(isNetErr(e)){queue.push({op:'put',path:n.path,content:raw,message:`web: ${title}`,base:n.sha});apply(n.sha);toast('오프라인 — 연결되면 반영됩니다');return;}
     if(isConflict(e)){
       // 다른 기기가 먼저 바꿈. 최신본을 받아 와서 sha를 맞추고, 사용자의 내용은 유지한 채 다시 저장하게 한다.
       try{const f=await api.file(n.path);n.sha=f.sha;const p=parseFM(f.content);
@@ -910,7 +933,7 @@ function renderChecklist(body){
   const d=items.filter(x=>x.done).length;
   box.append(el('h4',{},`체크리스트 ${d}/${items.length}`,progEl({body})));
   for(const it of items)box.append(el('label',{class:it.done?'done':''},el('input',{type:'checkbox',checked:it.done?'':null,onchange:async e=>{
-    const ta=$('#pBody');const ls=ta.value.split('\n');const bodyLines=current.body.replace(/^#\s+.*\n?/m,'').split('\n');
+    const ta=$('#pBody');const ls=ta.value.split('\n');const bodyLines=stripH1(current.body).split('\n');
     // textarea 기준 줄 번호로 다시 찾는다 (본문 편집 중일 수 있음)
     let idx=ls.findIndex((l,j)=>j>=0&&parseTodo(l)&&parseTodo(l).text===it.text);if(idx<0){toast('본문에서 항목을 찾지 못했습니다');return;}
     const m=ls[idx].match(TODO_RE);ls[idx]=e.target.checked?`${m[1]}- [x] ${m[3].replace(/\s*✅\s*\d{4}-\d{2}-\d{2}/,'')} ✅ ${today()}`:`${m[1]}- [ ] ${m[3].replace(/\s*✅\s*\d{4}-\d{2}-\d{2}/,'')}`;
@@ -933,20 +956,20 @@ async function duplicateNote(n){
   const title=(await ask('복제본 제목',{value:n.title+' 사본'})||'').trim();if(!title)return;
   const path=`${n.folder}/${slug(title)}.md`;if(notes.some(x=>x.path===path)){toast('같은 이름의 노트가 있습니다');return;}
   const fm={...n.fm,created:today(),updated:today()};delete fm.order;
-  const body=(/^#\s+/m.test(n.body)?`# ${title}\n\n`:'')+n.body.replace(/^#\s+.*\n?/m,'').replace(/^\n+/,'');
+  const body=(h1Of(n.body)?`# ${title}\n\n`:'')+stripH1(n.body).replace(/^\n+/,'');
   const raw=buildFM(fm)+body;const nn={path,sha:null,raw,fm,body,title,folder:n.folder};
   try{const r=await api.put(path,raw,null,`web: 복제 ${title}`);nn.sha=r.content.sha;}
   catch(e){if(isNetErr(e))queue.push({op:'put',path,content:raw,message:`web: 복제 ${title}`});else{toast('복제 실패: '+e.message,4000);return;}}
   notes.unshift(nn);saveCache();fillFolders();render();openNote(nn);toast('복제했습니다');
 }
 async function moveNote(n,folder,patch={}){
-  if(n.folder===folder&&!Object.keys(patch).length)return;
+  if(n.folder===folder){if(Object.keys(patch).length)await saveNote(n,patch,undefined,undefined,true);return;}
   const path=`${folder}/${n.path.split('/').pop()}`;if(n.path!==path&&notes.some(x=>x.path===path)){toast('대상 폴더에 같은 이름의 노트가 있습니다');return;}
   const fm={...n.fm,...patch,updated:today()};const raw=buildFM(fm)+n.body.replace(/^\n+/,'');
   if(current===n)$('#pMsg').textContent='이동 중…';
   let r;try{r=await api.put(path,raw,null,`web: 이동 ${n.title} → ${folder}`);}catch(e){if(current===n)$('#pMsg').textContent='';toast('이동 실패: '+e.message+(isNetErr(e)?' (이동은 온라인에서만)':''),4000);return;}
   try{try{await api.del(n.path,n.sha,`web: 이동 ${n.title} → ${folder}`);}catch(e){try{await api.del(path,r.content.sha,'web: 이동 취소');}catch{}throw e;}
-    Object.assign(n,{path,folder,sha:r.content.sha,raw,fm});saveCache();fillFolders();render();if(current===n){$('#pPath').textContent=path;$('#pMsg').textContent='';}toast(`${folder}로 이동했습니다`);}
+    Object.assign(n,{path,folder,sha:r.content.sha,raw,fm});saveCache();fillFolders();render();if(current===n){openNote(n);$('#pMsg').textContent='';}toast(`${folder}로 이동했습니다`);}
   catch(e){if(current===n)$('#pMsg').textContent='';toast('이동 실패: '+e.message+(isNetErr(e)?' (이동은 온라인에서만)':''),4000);}
 }
 async function moveNotePrompt(n){
@@ -959,7 +982,7 @@ $('#pDelete').onclick=async()=>{if(!current||!await confirmAsk('삭제할까요?
   catch(e){if(isNetErr(e)){queue.push({op:'del',path:n.path,message:`web: 삭제 ${n.title}`});done();toast('오프라인 — 연결되면 삭제됩니다');}else toast('삭제 실패: '+e.message,4000);}};
 $('#pClose').onclick=closePanel;$('#dim').onclick=closePanel;
 $('#pToggle').onclick=()=>showPreview($('#pPreview').hidden);
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&current)closePanel();if((e.ctrlKey||e.metaKey)&&e.key==='s'&&current){e.preventDefault();$('#pSave').click();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#settings').classList.contains('on')){$('#settings').classList.remove('on');return;}if($('#palette').classList.contains('on'))return;if(current)closePanel();}if((e.ctrlKey||e.metaKey)&&e.key==='s'&&current){e.preventDefault();$('#pSave').click();}});
 
 /* ===================== 빠른 입력 ===================== */
 $('#quick').onsubmit=async e=>{
@@ -977,14 +1000,16 @@ $('#quick').onsubmit=async e=>{
 };
 
 /* ===================== 템플릿으로 새 노트 ===================== */
+async function fromTemplate(name,title){
+  try{const t=await api.file(`_templates/${name}.md`,true);if(!t)return null;
+    return t.content.replace(/<%\s*tp\.date\.now\([^)]*\)\s*%>/g,today()).replace(/<%\s*tp\.file\.title\s*%>/g,title).replace(/<%[\s\S]*?%>/g,'');}
+  catch{return null;}
+}
 const TEMPLATE_OF={'10_Projects':'Project','20_Areas':'Area','30_Resources':'Resource','40_Notes':'Permanent','50_MOC':'MOC'};
 async function newFromTemplate(folder){
   const title=(await ask(`${folder.replace(/^\d+_/,'')}에 새 노트`,{placeholder:'제목'})||'').trim();if(!title)return;
   const path=`${folder}/${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return;}
-  let raw;
-  try{const t=await api.file(`_templates/${TEMPLATE_OF[folder]}.md`,true);
-    raw=t?t.content.replace(/<%\s*tp\.date\.now\([^)]*\)\s*%>/g,today()).replace(/<%\s*tp\.file\.title\s*%>/g,title).replace(/<%[\s\S]*?%>/g,''):null;}
-  catch{raw=null;}
+  let raw=await fromTemplate(TEMPLATE_OF[folder],title);
   if(!raw)raw=buildFM({type:(TEMPLATE_OF[folder]||'note').toLowerCase(),status:'active',created:today(),updated:today()})+`# ${title}\n\n`;
   const{fm,body}=parseFM(raw);const n={path,sha:null,raw,fm,body,title,folder};
   try{const r=await api.put(path,raw,null,`web: 새 노트 ${title}`);n.sha=r.content.sha;}
@@ -995,7 +1020,7 @@ async function newFromTemplate(folder){
 async function newWithDue(ds){
   const title=(await ask(`${ds} 마감 노트`,{placeholder:'제목'})||'').trim();if(!title)return;
   const path=`00_Inbox/${ds}-${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return;}
-  const raw=buildFM({type:'inbox',status:'active',due:ds,created:today(),updated:today()})+`# ${title}\n\n`;
+  const raw=buildFM({type:'inbox',due:ds,created:today()})+`# ${title}\n\n`;
   const{fm,body}=parseFM(raw);const n={path,sha:null,raw,fm,body,title,folder:'00_Inbox'};
   try{const r=await api.put(path,raw,null,`web: ${title}`);n.sha=r.content.sha;}
   catch(e){if(isNetErr(e))queue.push({op:'put',path,content:raw,message:`web: ${title}`});else{toast('생성 실패: '+e.message,4000);return;}}
@@ -1005,26 +1030,39 @@ async function addTodoOn(ds){
   const text=(await ask(`${ds} 할 일`,{placeholder:'할 일 내용'})||'').trim();if(!text)return;
   const dp=`01_Daily/${today()}.md`;let n=notes.find(x=>x.path===dp);
   const line=`- [ ] ${text} 📅 ${ds}`;
-  if(!n){const raw=buildFM({type:'daily',created:today()})+`# ${today()}\n\n## 오늘 할 일\n${line}\n\n## 메모\n`;const{fm,body}=parseFM(raw);n={path:dp,sha:null,raw,fm,body,title:today(),folder:'01_Daily'};
+  if(!n){let raw=await fromTemplate('Daily',today());if(!raw)raw=buildFM({type:'daily',created:today()})+`# ${today()}\n\n## 오늘 할 일\n\n## 메모\n`;
+    const i0=raw.indexOf('## 오늘 할 일');raw=i0>=0?raw.slice(0,i0+'## 오늘 할 일'.length)+'\n'+line+raw.slice(i0+'## 오늘 할 일'.length):raw.replace(/\s*$/,'')+`\n\n## 오늘 할 일\n${line}\n`;
+    const{fm,body}=parseFM(raw);n={path:dp,sha:null,raw,fm,body,title:today(),folder:'01_Daily'};
     try{const r=await api.put(dp,raw,null,`web: 할 일 ${text}`);n.sha=r.content.sha;}catch(e){if(isNetErr(e))queue.push({op:'put',path:dp,content:raw,message:`web: 할 일 ${text}`});else{toast('생성 실패: '+e.message,4000);return;}}
     notes.unshift(n);saveCache();render();return;}
   let body=n.body;const i=body.indexOf('## 오늘 할 일');
   if(i>=0){const j=body.indexOf('\n## ',i+1);const end=j<0?body.length:j;body=body.slice(0,end).replace(/\s*$/,'')+'\n'+line+'\n'+(j<0?'':'\n')+body.slice(end).replace(/^\n/,'');}
   else body=body.replace(/\s*$/,'')+`\n\n## 오늘 할 일\n${line}\n`;
-  await saveNote(n,{},undefined,body.replace(/^#\s+.*\n?/m,''),true);render();
+  await saveNote(n,{},undefined,stripH1(body),true);render();
 }
 
 /* ===================== 이미지 첨부 ===================== */
 const imgCache={};
+const readB64=f=>new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result.split(',')[1]);fr.readAsDataURL(f);});
+async function shrinkImage(f,ext){
+  const MAX=1600,LIMIT=600*1024;
+  if(f.size<=LIMIT||ext==='svg'||ext==='gif')return{b64:await readB64(f),ext,type:f.type};
+  try{const bmp=await createImageBitmap(f);const k=Math.min(1,MAX/Math.max(bmp.width,bmp.height));
+    const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+    const keepPng=ext==='png'&&k===1;const type=keepPng?'image/png':'image/jpeg';
+    const blob=await new Promise(r=>c.toBlob(r,type,0.85));if(!blob||blob.size>=f.size)return{b64:await readB64(f),ext,type:f.type};
+    return{b64:await readB64(blob),ext:keepPng?'png':'jpg',type};}
+  catch{return{b64:await readB64(f),ext,type:f.type};}
+}
 async function attachFiles(files){
   if(!current){toast('노트를 먼저 여세요');return;}
   const ta=$('#pBody');
   for(const f of files){if(!f.type.startsWith('image/'))continue;
     const ext=(f.name.split('.').pop()||'png').toLowerCase();const base=slug(f.name.replace(/\.[^.]+$/,''))||'image';
-    const name=`${today()}-${base}-${Math.random().toString(36).slice(2,6)}.${ext}`;const path=`_attachments/${name}`;
-    const b64=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result.split(',')[1]);fr.readAsDataURL(f);});
+    const{b64,ext:ext2,type}=await shrinkImage(f,ext);
+    const name=`${today()}-${base}-${Math.random().toString(36).slice(2,6)}.${ext2}`;const path=`_attachments/${name}`;
     $('#pMsg').textContent=`업로드 중: ${name}`;
-    try{await api.putB64(path,b64,null,`web: 첨부 ${name}`);imgCache['img:'+path]=`data:${f.type};base64,${b64}`;}
+    try{await api.putB64(path,b64,null,`web: 첨부 ${name}`);imgCache['img:'+path]=`data:${type};base64,${b64}`;}
     catch(e){toast('업로드 실패: '+e.message,4000);continue;}
     const md=`![${base}](${path})`;const st=ta.selectionStart??ta.value.length;
     ta.value=ta.value.slice(0,st)+(st>0&&ta.value[st-1]!=='\n'?'\n':'')+md+'\n'+ta.value.slice(st);
@@ -1060,7 +1098,7 @@ $('#pBody').addEventListener('keydown',e=>{if(!acItems.length)return;
   if(e.key==='ArrowDown'){e.preventDefault();acIdx=(acIdx+1)%acItems.length;acRender();}
   else if(e.key==='ArrowUp'){e.preventDefault();acIdx=(acIdx-1+acItems.length)%acItems.length;acRender();}
   else if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();acPick(acIdx);}
-  else if(e.key==='Escape'){e.preventDefault();acClose();}});
+  else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();acClose();}});
 
 /* ===================== 설정 모달 ===================== */
 function optRow(list,o,listEl){
@@ -1118,7 +1156,7 @@ let palItems=[],palIdx=0;
 function palCommands(){
   const c=[{k:'새 메모',n:'Inbox에 빠른 메모',run:()=>{$('#quickText').focus();}}];
   for(const[f,t]of Object.entries(TEMPLATE_OF))c.push({k:'새 노트',n:`${f.replace(/^\d+_/,'')} (${t} 템플릿)`,run:()=>newFromTemplate(f)});
-  for(const[v,name]of[['table','표'],['board','보드'],['gallery','갤러리'],['todo','할 일']])c.push({k:'뷰',n:name,run:()=>{state.view=v;render();}});
+  for(const[v,name]of[['table','표'],['board','보드'],['gallery','갤러리'],['todo','할 일'],['calendar','달력'],['docs','문서']])c.push({k:'뷰',n:name,run:()=>switchView(v)});
   for(const sv of config.views)c.push({k:'저장된 뷰',n:sv.name,run:()=>applyView(sv)});
   if(current){const n=current;c.push({k:'이 노트',n:'복제',run:()=>duplicateNote(n)},{k:'이 노트',n:'다른 폴더로 이동',run:()=>moveNotePrompt(n)},{k:'이 노트',n:'보관',run:()=>archiveNote(n)},{k:'이 노트',n:'넓게/좁게 보기',run:()=>$('#panel').classList.toggle('wide')});}
   c.push({k:'동작',n:'새로고침 (캐시 비움)',run:()=>{localStorage.removeItem('brain.cache');load();}});
@@ -1131,7 +1169,7 @@ function palRender(){
   const q=$('#palInput').value.trim();const list=$('#palList');list.innerHTML='';palItems=[];palIdx=0;
   const cmdMode=q.startsWith('>');const qq=(cmdMode?q.slice(1):q).trim().toLowerCase();
   if(!cmdMode){
-    const hits=notes.filter(n=>!qq||n.title.toLowerCase().includes(qq)||n.path.toLowerCase().includes(qq)).slice(0,qq?30:8);
+    const hits=(qq?notes:[...notes].sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1)).filter(n=>!qq||n.title.toLowerCase().includes(qq)||n.path.toLowerCase().includes(qq)).slice(0,qq?30:8);
     if(hits.length)list.append(el('div',{class:'sec'},qq?'노트':'최근 노트'));
     for(const n of hits)palItems.push({label:n.title,k:n.folder.replace(/^\d+_/,''),run:()=>openNote(n)});
     if(qq&&hits.length<30){list.append(el('div',{class:'sec'},'본문 검색'));
@@ -1150,10 +1188,11 @@ $('#btnPalette').onclick=openPalette;
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#palette').classList.contains('on')?closePalette():openPalette();}});
 
 /* ===================== 컨트롤 ===================== */
-document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;render();});
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 ['#fFolder','#fStatus','#fLabel','#fGroup'].forEach(s=>$(s).onchange=()=>{readControls();state.saved='';render();});
-$('#q').oninput=()=>{readControls();render();};
+let qT;$('#q').oninput=()=>{clearTimeout(qT);qT=setTimeout(()=>{readControls();render();},120);};
 $('#btnReload').onclick=()=>{localStorage.removeItem('brain.cache');load();};
+$('#qbadge').onclick=async()=>{if(!queue.list.length)return;if(navigator.onLine){await queue.flush();if(!queue.list.length)return;}if(await confirmAsk('대기 중인 변경을 버릴까요?',queue.list.map(x=>`${x.op==='del'?'삭제':'저장'} ${x.path}`).join('\n'),'버리기')){queue.list=[];queue.save();}};
 
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 try{const c=JSON.parse(localStorage.getItem('brain.config')||'null');if(c)config={...structuredClone(DEFAULT_CONFIG),...c};}catch{}
