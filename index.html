@@ -127,6 +127,15 @@ td input.inl{width:118px}
 .pb textarea{width:100%;min-height:50vh;border:1px solid var(--line);border-radius:var(--radius);padding:10px;background:var(--bg);resize:vertical;font-family:var(--sans);line-height:1.6}
 .preview{border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;min-height:50vh;line-height:1.65}
 .preview h1,.preview h2,.preview h3{margin:.8em 0 .3em;line-height:1.3}
+.preview img{max-width:100%;border-radius:4px}
+.pb{position:relative}
+.ac{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.12);max-height:220px;overflow:auto;min-width:220px;display:none}
+.ac.on{display:block}
+.ac button{display:block;width:100%;text-align:left;padding:6px 10px;font-size:13px;background:none;border:0;color:var(--fg)}
+.ac button[aria-selected=true],.ac button:hover{background:var(--bg2)}
+.ac button small{color:var(--fg3);margin-left:6px}
+.ptools{display:flex;gap:6px;align-items:center;margin:0 0 6px;font-size:12px;color:var(--fg3)}
+.daylist .add{margin-top:8px}
 .preview ul{padding-left:1.2em}.preview code{background:var(--bg2);padding:1px 4px;border-radius:3px;font-size:.9em}
 .preview a.wl{text-decoration:none;border-bottom:1px solid var(--accent)}
 .pf{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--line);align-items:center}
@@ -272,7 +281,9 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
       <label for="pDue">마감</label><input id="pDue" type="date">
       <label>종류</label><span id="pType" style="padding-top:4px;color:var(--fg2)"></span>
     </div>
+    <div class="ptools"><button class="btn sm" id="pAttach">이미지 첨부</button><span>붙여넣기·드래그도 됩니다 · [[ 로 링크 자동완성</span><input type="file" id="pFile" accept="image/*" multiple hidden></div>
     <textarea id="pBody" spellcheck="false" aria-label="본문"></textarea>
+    <div class="ac" id="pAc" role="listbox"></div>
     <div class="preview" id="pPreview" hidden></div>
     <div class="links" id="pLinks"></div>
   </div>
@@ -367,6 +378,8 @@ const api={
   tree(){return api.req(`/repos/${cfg.repo}/git/trees/${cfg.branch}?recursive=1`);},
   async file(path,allow404){const j=await api.req(`/repos/${cfg.repo}/contents/${encodeURI(path)}?ref=${cfg.branch}`,{allow404});return j?{sha:j.sha,content:b64dec(j.content)}:null;},
   put(path,content,sha,message){return api.req(`/repos/${cfg.repo}/contents/${encodeURI(path)}`,{method:'PUT',body:JSON.stringify({message,content:b64enc(content),branch:cfg.branch,...(sha?{sha}:{})})});},
+  putB64(path,b64,sha,message){return api.req(`/repos/${cfg.repo}/contents/${encodeURI(path)}`,{method:'PUT',body:JSON.stringify({message,content:b64,branch:cfg.branch,...(sha?{sha}:{})})});},
+  async fileB64(path){const j=await api.req(`/repos/${cfg.repo}/contents/${encodeURI(path)}?ref=${cfg.branch}`,{allow404:true});return j?j.content.replace(/\n/g,''):null;},
   del(path,sha,message){return api.req(`/repos/${cfg.repo}/contents/${encodeURI(path)}`,{method:'DELETE',body:JSON.stringify({message,sha,branch:cfg.branch})});},
 };
 const b64enc=s=>btoa(String.fromCharCode(...new TextEncoder().encode(s)));
@@ -422,6 +435,7 @@ function mdToHtml(md){
   h=h.replace(/^### (.*)$/gm,'<h3>$1</h3>').replace(/^## (.*)$/gm,'<h2>$1</h2>').replace(/^# (.*)$/gm,'<h1>$1</h1>');
   h=h.replace(/^- \[([ xX])\] (.*)$/gm,(_,c,t)=>`<li><input type="checkbox" disabled ${c.trim()?'checked':''}> ${t}</li>`);
   h=h.replace(/^- (.*)$/gm,'<li>$1</li>').replace(/(<li>[\s\S]*?<\/li>\n?)+/g,m=>`<ul>${m.replace(/\n/g,'')}</ul>\n`);
+  h=h.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g,(_,a,u)=>`<img alt="${a}" data-src="${u}">`).replace(/!\[\[([^\]|]+\.(?:png|jpe?g|gif|webp|svg))(?:\|[^\]]*)?\]\]/gi,(_,f)=>`<img alt="${f}" data-src="_attachments/${f}">`);
   h=h.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,(_,t,a)=>`<a class="wl" href="#" data-wl="${t}">${a||t}</a>`);
   h=h.replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
   h=h.replace(/&lt;!--[\s\S]*?--&gt;/g,'');
@@ -669,6 +683,7 @@ function renderCalendar(m){
   const sel=items[calSel]||[];const dl=el('div',{class:'daylist'},el('h3',{},`${calSel} · ${sel.length}건`));
   for(const it of sel)dl.append(el('div',{class:'todo'},el('span',{class:'tag'+(it.st?' c-'+it.st.color:'')},it.kind==='todo'?'할 일':it.kind==='daily'?'데일리':(it.st?it.st.name:'마감')),el('span',{class:'tx'},el('button',{onclick:()=>openNote(it.note)},it.title))));
   if(!sel.length)dl.append(el('div',{style:'color:var(--fg3);font-size:13px'},'이 날짜에 마감·할 일·데일리 노트가 없습니다.'));
+  dl.append(el('div',{class:'add'},el('button',{class:'btn sm',onclick:()=>newWithDue(calSel)},'+ 이 날짜 마감 노트'),' ',el('button',{class:'btn sm',onclick:()=>addTodoOn(calSel)},'+ 이 날짜 할 일')));
   wrap.append(dl);m.append(wrap);
 }
 
@@ -728,6 +743,9 @@ function closePanel(){
 function showPreview(on){
   $('#pBody').hidden=on;$('#pPreview').hidden=!on;$('#pToggle').textContent=on?'편집':'미리보기';
   if(on){$('#pPreview').innerHTML=mdToHtml($('#pBody').value);
+    $('#pPreview').querySelectorAll('img[data-src]').forEach(async im=>{const u=im.dataset.src;if(/^https?:/.test(u)){im.src=u;return;}
+      const path=decodeURI(u.replace(/^\.?\//,''));const key='img:'+path;if(imgCache[key]){im.src=imgCache[key];return;}
+      try{const b=await api.fileB64(path);if(b){const ext=path.split('.').pop().toLowerCase();const mime=ext==='svg'?'image/svg+xml':ext==='jpg'?'image/jpeg':'image/'+ext;im.src=imgCache[key]=`data:${mime};base64,${b}`;}else im.alt+=' (없음)';}catch{im.alt+=' (불러오기 실패)';}});
     $('#pPreview').querySelectorAll('a.wl').forEach(a=>a.onclick=e=>{e.preventDefault();const t=notes.find(x=>x.title===a.dataset.wl||x.path.endsWith('/'+a.dataset.wl+'.md'));if(t)openNote(t);else toast('노트를 찾을 수 없습니다');});}
 }
 async function saveNote(n,patch,newTitle,newBody,quiet){
@@ -793,6 +811,76 @@ async function newFromTemplate(folder){
   catch(e){if(isNetErr(e))queue.push({op:'put',path,content:raw,message:`web: 새 노트 ${title}`});else{toast('생성 실패: '+e.message,4000);return;}}
   notes.unshift(n);saveCache();fillFolders();render();openNote(n);
 }
+
+async function newWithDue(ds){
+  const title=prompt(`${ds} 마감 노트 — 제목`);if(!title)return;
+  const path=`00_Inbox/${ds}-${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return;}
+  const raw=buildFM({type:'inbox',status:'active',due:ds,created:today(),updated:today()})+`# ${title}\n\n`;
+  const{fm,body}=parseFM(raw);const n={path,sha:null,raw,fm,body,title,folder:'00_Inbox'};
+  try{const r=await api.put(path,raw,null,`web: ${title}`);n.sha=r.content.sha;}
+  catch(e){if(isNetErr(e))queue.push({op:'put',path,content:raw,message:`web: ${title}`});else{toast('생성 실패: '+e.message,4000);return;}}
+  notes.unshift(n);saveCache();fillFolders();render();openNote(n);
+}
+async function addTodoOn(ds){
+  const text=prompt(`${ds} 할 일`);if(!text)return;
+  const dp=`01_Daily/${today()}.md`;let n=notes.find(x=>x.path===dp);
+  const line=`- [ ] ${text} 📅 ${ds}`;
+  if(!n){const raw=buildFM({type:'daily',created:today()})+`# ${today()}\n\n## 오늘 할 일\n${line}\n\n## 메모\n`;const{fm,body}=parseFM(raw);n={path:dp,sha:null,raw,fm,body,title:today(),folder:'01_Daily'};
+    try{const r=await api.put(dp,raw,null,`web: 할 일 ${text}`);n.sha=r.content.sha;}catch(e){if(isNetErr(e))queue.push({op:'put',path:dp,content:raw,message:`web: 할 일 ${text}`});else{toast('생성 실패: '+e.message,4000);return;}}
+    notes.unshift(n);saveCache();render();return;}
+  let body=n.body;const i=body.indexOf('## 오늘 할 일');
+  if(i>=0){const j=body.indexOf('\n## ',i+1);const end=j<0?body.length:j;body=body.slice(0,end).replace(/\s*$/,'')+'\n'+line+'\n'+(j<0?'':'\n')+body.slice(end).replace(/^\n/,'');}
+  else body=body.replace(/\s*$/,'')+`\n\n## 오늘 할 일\n${line}\n`;
+  await saveNote(n,{},undefined,body.replace(/^#\s+.*\n?/m,''),true);render();
+}
+
+/* ===================== 이미지 첨부 ===================== */
+const imgCache={};
+async function attachFiles(files){
+  if(!current){toast('노트를 먼저 여세요');return;}
+  const ta=$('#pBody');
+  for(const f of files){if(!f.type.startsWith('image/'))continue;
+    const ext=(f.name.split('.').pop()||'png').toLowerCase();const base=slug(f.name.replace(/\.[^.]+$/,''))||'image';
+    const name=`${today()}-${base}-${Math.random().toString(36).slice(2,6)}.${ext}`;const path=`_attachments/${name}`;
+    const b64=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result.split(',')[1]);fr.readAsDataURL(f);});
+    $('#pMsg').textContent=`업로드 중: ${name}`;
+    try{await api.putB64(path,b64,null,`web: 첨부 ${name}`);imgCache['img:'+path]=`data:${f.type};base64,${b64}`;}
+    catch(e){toast('업로드 실패: '+e.message,4000);continue;}
+    const md=`![${base}](${path})`;const st=ta.selectionStart??ta.value.length;
+    ta.value=ta.value.slice(0,st)+(st>0&&ta.value[st-1]!=='\n'?'\n':'')+md+'\n'+ta.value.slice(st);
+    $('#pMsg').textContent=`첨부됨: ${name} (저장을 눌러야 본문에 반영)`;}
+}
+$('#pAttach').onclick=()=>$('#pFile').click();
+$('#pFile').onchange=e=>{attachFiles([...e.target.files]);e.target.value='';};
+$('#pBody').addEventListener('paste',e=>{const fs=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));if(fs.length){e.preventDefault();attachFiles(fs);}});
+$('#pBody').addEventListener('dragover',e=>{if(e.dataTransfer?.types.includes('Files'))e.preventDefault();});
+$('#pBody').addEventListener('drop',e=>{const fs=[...(e.dataTransfer?.files||[])];if(fs.length){e.preventDefault();attachFiles(fs);}});
+
+/* ===================== [[링크]] 자동완성 ===================== */
+let acItems=[],acIdx=0,acRange=null;
+function acClose(){$('#pAc').classList.remove('on');acItems=[];acRange=null;}
+function acUpdate(){
+  const ta=$('#pBody');const pos=ta.selectionStart;const before=ta.value.slice(0,pos);
+  const m=before.match(/\[\[([^\[\]\n]*)$/);if(!m){acClose();return;}
+  const q=m[1].toLowerCase();acRange=[pos-m[1].length,pos];
+  acItems=notes.filter(n=>n!==current&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>a.title.toLowerCase().startsWith(q)&&!b.title.toLowerCase().startsWith(q)?-1:1).slice(0,8);
+  if(!acItems.length){acClose();return;}
+  acIdx=0;acRender();
+  const box=$('#pAc');box.classList.add('on');
+  const lines=before.split('\n').length;const lh=parseFloat(getComputedStyle(ta).lineHeight)||22;
+  box.style.left='10px';box.style.top=(ta.offsetTop+Math.min(lines*lh+6-ta.scrollTop,ta.clientHeight-10))+'px';
+}
+function acRender(){const box=$('#pAc');box.innerHTML='';acItems.forEach((n,i)=>box.append(el('button',{role:'option','aria-selected':String(i===acIdx),onmousedown:e=>{e.preventDefault();acPick(i);}},n.title,el('small',{},n.folder.replace(/^\d+_/,'')))));}
+function acPick(i){const ta=$('#pBody');const n=acItems[i];if(!n||!acRange)return;const after=ta.value.slice(acRange[1]);const close=after.startsWith(']]')?'':']]';
+  ta.value=ta.value.slice(0,acRange[0])+n.title+close+after;const p=acRange[0]+n.title.length+2;ta.setSelectionRange(p,p);acClose();ta.focus();}
+$('#pBody').addEventListener('input',acUpdate);
+$('#pBody').addEventListener('click',acUpdate);
+$('#pBody').addEventListener('blur',()=>setTimeout(acClose,150));
+$('#pBody').addEventListener('keydown',e=>{if(!acItems.length)return;
+  if(e.key==='ArrowDown'){e.preventDefault();acIdx=(acIdx+1)%acItems.length;acRender();}
+  else if(e.key==='ArrowUp'){e.preventDefault();acIdx=(acIdx-1+acItems.length)%acItems.length;acRender();}
+  else if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();acPick(acIdx);}
+  else if(e.key==='Escape'){e.preventDefault();acClose();}});
 
 /* ===================== 설정 모달 ===================== */
 function optRow(list,o,listEl){
