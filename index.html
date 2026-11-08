@@ -176,6 +176,11 @@ td input.inl{width:118px}
 /* ---------- 설정 ---------- */
 .modal{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35);padding:16px}
 .modal.on{display:flex}
+.ask .box{padding:16px;gap:10px}
+.ask h3{margin:0;font-size:15px;font-weight:600}
+.ask p{margin:0;font-size:13px;color:var(--fg2);white-space:pre-line}
+.ask input,.ask select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg2);font-size:14px}
+.ask .row{display:flex;justify-content:flex-end;gap:8px}
 .modal .box{background:var(--bg);border-radius:10px;width:min(520px,100%);border:1px solid var(--line);max-height:92vh;display:flex;flex-direction:column}
 .modal .mh{display:flex;gap:2px;padding:10px 14px 0;border-bottom:1px solid var(--line)}
 .modal .mh button{padding:6px 10px;color:var(--fg2);border-bottom:2px solid transparent;margin-bottom:-1px}
@@ -322,6 +327,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   </div>
 </aside>
 
+<div class="modal ask" id="ask" role="dialog" aria-modal="true"><form class="box" id="askForm"><h3 id="askTitle"></h3><p id="askMsg"></p><div id="askField"></div><div class="row"><button type="button" class="btn" id="askCancel">취소</button><button type="submit" class="btn primary" id="askOk">확인</button></div></form></div>
 <div class="modal" id="settings">
   <div class="box">
     <div class="mh" role="tablist">
@@ -395,6 +401,22 @@ const today=()=>new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOStr
 const addDays=(d,n)=>{const x=new Date(d+'T00:00:00');x.setDate(x.getDate()+n);return x.toISOString().slice(0,10);};
 function toast(m,ms=1800){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),ms);}
 const saveState=()=>localStorage.setItem('brain.state',JSON.stringify(state));
+/* 브라우저 prompt/confirm 대신 쓰는 앱 내 대화상자. PWA·도킹 패널에서도 동작 */
+function ask(title,{msg='',value='',placeholder='',options=null,ok='확인',danger=false}={}){
+  return new Promise(res=>{
+    const m=$('#ask'),f=$('#askField');f.innerHTML='';$('#askTitle').textContent=title;$('#askMsg').textContent=msg;$('#askMsg').hidden=!msg;
+    let inp=null;
+    if(options){inp=el('select',{});for(const o of options)inp.append(el('option',{value:o.value},o.label));f.append(inp);}
+    else if(value!==null){inp=el('input',{value,placeholder,autocomplete:'off'});f.append(inp);}
+    const okb=$('#askOk');okb.textContent=ok;okb.className='btn '+(danger?'danger':'primary');
+    const done=v=>{m.classList.remove('on');$('#askForm').onsubmit=null;$('#askCancel').onclick=null;document.removeEventListener('keydown',esc);res(v);};
+    const esc=e=>{if(e.key==='Escape'){e.stopPropagation();done(null);}};
+    $('#askForm').onsubmit=e=>{e.preventDefault();done(inp?inp.value:true);};
+    $('#askCancel').onclick=()=>done(null);document.addEventListener('keydown',esc,true);
+    m.classList.add('on');setTimeout(()=>{inp?.focus();inp?.select?.();},30);
+  });
+}
+const confirmAsk=(title,msg,ok='확인')=>ask(title,{msg,value:null,ok,danger:true}).then(v=>v===true);
 const saveCache=()=>localStorage.setItem('brain.cache',JSON.stringify(Object.fromEntries(notes.map(x=>[x.path,x]))));
 const optOf=(list,id)=>list.find(o=>o.id===id);
 const statusOpt=id=>optOf(config.statuses,id);const labelOpt=id=>optOf(config.labels,id);
@@ -551,7 +573,7 @@ function applyView(sv){
   restoreControls();saveState();render();
 }
 async function saveCurrentView(){
-  readControls();const name=prompt('뷰 이름',state.saved?(optOf(config.views,state.saved)||{}).name:'');if(!name)return;
+  readControls();const name=await ask('뷰 이름',{value:state.saved?(optOf(config.views,state.saved)||{}).name:''});if(!name)return;
   const id=state.saved||('v'+Date.now().toString(36));
   const sv={id,name,view:state.view,folder:state.folder,status:state.status,label:state.label,group:state.group,sort:state.sort,q:state.q};
   const i=config.views.findIndex(x=>x.id===id);if(i>=0)config.views[i]=sv;else config.views.push(sv);
@@ -894,7 +916,7 @@ $('#pMore').onclick=e=>{e.stopPropagation();document.querySelectorAll('.menu').f
   setTimeout(()=>document.addEventListener('click',function h(ev){if(!menu.contains(ev.target)){menu.remove();document.removeEventListener('click',h);}}),0);
 };
 async function duplicateNote(n){
-  const title=prompt('복제본 제목',n.title+' 사본');if(!title)return;
+  const title=(await ask('복제본 제목',{value:n.title+' 사본'})||'').trim();if(!title)return;
   const path=`${n.folder}/${slug(title)}.md`;if(notes.some(x=>x.path===path)){toast('같은 이름의 노트가 있습니다');return;}
   const fm={...n.fm,created:today(),updated:today()};delete fm.order;
   const body=(/^#\s+/m.test(n.body)?`# ${title}\n\n`:'')+n.body.replace(/^#\s+.*\n?/m,'').replace(/^\n+/,'');
@@ -912,12 +934,11 @@ async function moveNote(n,folder,patch={}){
     Object.assign(n,{path,folder,sha:r.content.sha,raw,fm});saveCache();fillFolders();render();if(current===n){$('#pPath').textContent=path;$('#pMsg').textContent='';}toast(`${folder}로 이동했습니다`);}
   catch(e){if(current===n)$('#pMsg').textContent='';toast('이동 실패: '+e.message+(isNetErr(e)?' (이동은 온라인에서만)':''),4000);}
 }
-function moveNotePrompt(n){
-  const list=FOLDERS.filter(f=>f!==n.folder);const pick=prompt('이동할 폴더 번호\n'+list.map((f,i)=>`${i+1}. ${f}`).join('\n'));
-  const f=list[Number(pick)-1];if(f)moveNote(n,f);
+async function moveNotePrompt(n){
+  const list=FOLDERS.filter(f=>f!==n.folder);const f=await ask('이동할 폴더',{options:list.map(x=>({value:x,label:x})),ok:'이동'});if(f)moveNote(n,f);
 }
-async function archiveNote(n){if(!confirm(`"${n.title}"을 보관할까요? status: archived로 바꾸고 90_Archive로 옮깁니다.`))return;await moveNote(n,'90_Archive',{status:'archived'});}
-$('#pDelete').onclick=async()=>{if(!current||!confirm(`"${current.title}" 노트를 삭제할까요?`))return;
+async function archiveNote(n){if(!await confirmAsk('보관할까요?',`"${n.title}" — status를 archived로 바꾸고 90_Archive로 옮깁니다.`,'보관'))return;await moveNote(n,'90_Archive',{status:'archived'});}
+$('#pDelete').onclick=async()=>{if(!current||!await confirmAsk('삭제할까요?',`"${current.title}" 노트가 저장소에서 지워집니다.`,'삭제'))return;
   const n=current;const done=()=>{notes=notes.filter(x=>x!==n);saveCache();closePanel();fillFolders();render();};
   try{await api.del(n.path,n.sha,`web: 삭제 ${n.title}`);done();toast('삭제했습니다');}
   catch(e){if(isNetErr(e)){queue.push({op:'del',path:n.path,message:`web: 삭제 ${n.title}`});done();toast('오프라인 — 연결되면 삭제됩니다');}else toast('삭제 실패: '+e.message,4000);}};
@@ -943,7 +964,7 @@ $('#quick').onsubmit=async e=>{
 /* ===================== 템플릿으로 새 노트 ===================== */
 const TEMPLATE_OF={'10_Projects':'Project','20_Areas':'Area','30_Resources':'Resource','40_Notes':'Permanent','50_MOC':'MOC'};
 async function newFromTemplate(folder){
-  const title=prompt(`${folder.replace(/^\d+_/,'')}에 새 노트 — 제목`);if(!title)return;
+  const title=(await ask(`${folder.replace(/^\d+_/,'')}에 새 노트`,{placeholder:'제목'})||'').trim();if(!title)return;
   const path=`${folder}/${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return;}
   let raw;
   try{const t=await api.file(`_templates/${TEMPLATE_OF[folder]}.md`,true);
@@ -957,7 +978,7 @@ async function newFromTemplate(folder){
 }
 
 async function newWithDue(ds){
-  const title=prompt(`${ds} 마감 노트 — 제목`);if(!title)return;
+  const title=(await ask(`${ds} 마감 노트`,{placeholder:'제목'})||'').trim();if(!title)return;
   const path=`00_Inbox/${ds}-${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return;}
   const raw=buildFM({type:'inbox',status:'active',due:ds,created:today(),updated:today()})+`# ${title}\n\n`;
   const{fm,body}=parseFM(raw);const n={path,sha:null,raw,fm,body,title,folder:'00_Inbox'};
@@ -966,7 +987,7 @@ async function newWithDue(ds){
   notes.unshift(n);saveCache();fillFolders();render();openNote(n);
 }
 async function addTodoOn(ds){
-  const text=prompt(`${ds} 할 일`);if(!text)return;
+  const text=(await ask(`${ds} 할 일`,{placeholder:'할 일 내용'})||'').trim();if(!text)return;
   const dp=`01_Daily/${today()}.md`;let n=notes.find(x=>x.path===dp);
   const line=`- [ ] ${text} 📅 ${ds}`;
   if(!n){const raw=buildFM({type:'daily',created:today()})+`# ${today()}\n\n## 오늘 할 일\n${line}\n\n## 메모\n`;const{fm,body}=parseFM(raw);n={path:dp,sha:null,raw,fm,body,title:today(),folder:'01_Daily'};
