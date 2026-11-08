@@ -709,7 +709,7 @@ function renderBoard(v,m){
         if(g==='status'&&(n.fm.status||'')!==k)patch.status=k;
         if(g==='label'&&dragSrcKey!==k){const ls=labelsOf(n).filter(x=>x!==dragSrcKey);if(k)ls.push(k);patch.label=packLabels(ls);}
         // 열 안 위치: 앞뒤 카드의 order 사이값. 틈이 없으면 열 전체 재번호
-        const list=groups[k].filter(x=>x!==n);const idx=dropPos&&dropPos.before?list.indexOf(dropPos.before):list.length;
+        const list=groups[k].filter(x=>x!==n);const pos=dropPos&&dropPos.key===k?dropPos:null;let idx=pos&&pos.before?list.indexOf(pos.before):list.length;if(idx<0)idx=list.length;
         const prev=idx>0?ord(list[idx-1]):0,next=idx<list.length?ord(list[idx]):Infinity;
         if(list.length){
           if(next===Infinity&&prev===0&&idx===list.length&&!Object.keys(patch).length){dropPos=null;return;}
@@ -723,7 +723,7 @@ function renderBoard(v,m){
       const c=el('button',{class:'card',draggable:g==='status'||g==='label'?'true':null,onclick:()=>openNote(n),
         ondragstart:e=>{e.dataTransfer.setData('text/plain',n.path);dragSrcKey=k;dropPos=null;c.classList.add('dragging');},ondragend:()=>c.classList.remove('dragging'),
         ondragover:e=>{e.preventDefault();e.stopPropagation();col.classList.add('over');const r=c.getBoundingClientRect();const top=e.clientY<r.top+r.height/2;col.querySelectorAll('.card').forEach(x=>x.classList.remove('over-top','over-bottom'));c.classList.add(top?'over-top':'over-bottom');
-          const i=list.indexOf(n);dropPos={before:top?n:(list[i+1]||null)};}},
+          const i=list.indexOf(n);dropPos={key:k,before:top?n:(list[i+1]||null)};}},
         el('div',{class:'ct'},n.title),el('div',{class:'cm'},n.folder.replace(/^\d+_/,''),g!=='label'?labelTag(n):'',g!=='status'?statusTag(n):'',dueEl(n),progEl(n)));
       col.append(c);
     }
