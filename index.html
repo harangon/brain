@@ -470,21 +470,32 @@ const queue={
 window.addEventListener('online',()=>queue.flush());
 
 /* ===================== 마크다운 / 프론트매터 ===================== */
+/* 프론트매터: Obsidian이 쓰는 블록 리스트(key:\n  - 값)와 따옴표를 그대로 읽고, 쓸 때는 필요한 값만 따옴표로 감싼다 */
+const unq=v=>{v=v.trim();if((v.startsWith('"')&&v.endsWith('"'))||(v.startsWith("'")&&v.endsWith("'")))return v.slice(1,-1).replace(/\\"/g,'"');return v;};
 function parseFM(raw){
   const m=raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   const fm={};let body=raw;
   if(m){body=raw.slice(m[0].length);
-    for(const line of m[1].split(/\r?\n/)){const i=line.indexOf(':');if(i<1)continue;
+    const lines=m[1].split(/\r?\n/);let listKey=null;
+    for(const line of lines){
+      const li=line.match(/^\s+-\s*(.*)$/);
+      if(li&&listKey){if(!Array.isArray(fm[listKey]))fm[listKey]=[];const x=unq(li[1]);if(x!=='')fm[listKey].push(x);continue;}
+      if(/^\s/.test(line)||!line.trim()){continue;}
+      listKey=null;const i=line.indexOf(':');if(i<1)continue;
       const k=line.slice(0,i).trim();let v=line.slice(i+1).trim();
-      if(v.startsWith('[')&&v.endsWith(']'))v=v.slice(1,-1).split(',').map(s=>s.trim().replace(/^["']|["']$/g,'')).filter(Boolean);
-      else if(v==='true')v=true;else if(v==='false')v=false;else v=v.replace(/^["']|["']$/g,'');
+      if(v===''){fm[k]='';listKey=k;continue;}
+      if(v.startsWith('[')&&v.endsWith(']'))v=v.slice(1,-1).split(',').map(unq).filter(Boolean);
+      else if(v==='true')v=true;else if(v==='false')v=false;else v=unq(v);
       fm[k]=v;}}
   return{fm,body};
 }
+const yq=v=>{v=String(v);return /^[\s"'#&*!|>%@`{}\[\]-]|[:#]\s|\s$|^(true|false|null|~)$/.test(v)&&!/^\d{4}-\d{2}-\d{2}$/.test(v)?JSON.stringify(v):v;};
 function buildFM(fm){
   const lines=[];
   for(const[k,v]of Object.entries(fm)){if(v===''||v===undefined||v===null)continue;
-    if(Array.isArray(v))lines.push(`${k}: [${v.join(', ')}]`);else lines.push(`${k}: ${v}`);}
+    if(Array.isArray(v)){if(!v.length)continue;lines.push(`${k}: [${v.map(yq).join(', ')}]`);}
+    else if(typeof v==='boolean'||typeof v==='number')lines.push(`${k}: ${v}`);
+    else lines.push(`${k}: ${yq(v)}`);}
   return lines.length?`---\n${lines.join('\n')}\n---\n`:'';
 }
 function titleOf(path,body){const h=body.match(/^#\s+(.+)$/m);if(h)return h[1].trim();return path.split('/').pop().replace(/\.md$/,'');}
@@ -590,7 +601,7 @@ function visible(){
   v.sort((a,b)=>{const x=val(a,k),y=val(b,k);if(x===''&&y!=='')return 1;if(y===''&&x!=='')return -1;return (x<y?-1:x>y?1:0)*dir;});
   return v;
 }
-function val(n,k){if(k==='title')return n.title;if(k==='folder')return n.folder;if(k==='updated')return n.fm.updated||n.fm.created||'';return n.fm[k]??'';}
+function val(n,k){if(k==='title')return n.title;if(k==='folder')return n.folder;if(k==='updated')return n.fm.updated||n.fm.created||'';const v=n.fm[k]??'';return typeof v==='string'&&/^-?\d+(\.\d+)?$/.test(v)?Number(v):v;}
 
 /* ===================== 렌더 ===================== */
 function render(){
@@ -639,7 +650,7 @@ function inlineLabels(n){
 function inlineProp(n,pr){
   const v=n.fm[pr.id];const save=val=>saveNote(n,{[pr.id]:val});
   if(pr.type==='checkbox')return el('input',{type:'checkbox',checked:v===true||v==='true'?'':null,'aria-label':pr.name,onclick:e=>e.stopPropagation(),onchange:e=>save(e.target.checked)});
-  if(pr.type==='select'){const s=el('select',{class:'inl'+(v?'':' empty'),'aria-label':pr.name,onclick:e=>e.stopPropagation(),onchange:e=>save(e.target.value)});s.append(el('option',{value:''},'—'));for(const o of(pr.options||[]))s.append(el('option',{value:o},o));s.value=v??'';return s;}
+  if(pr.type==='select'){const s=el('select',{class:'inl'+(v?'':' empty'),'aria-label':pr.name,onclick:e=>e.stopPropagation(),onchange:e=>save(e.target.value)});s.append(el('option',{value:''},'—'));for(const o of(pr.options||[]))s.append(el('option',{value:o},o));if(v&&!(pr.options||[]).includes(String(v)))s.append(el('option',{value:v},v+' (설정에 없음)'));s.value=v??'';return s;}
   const inp=el('input',{type:pr.type==='date'?'date':pr.type==='number'?'number':'text',class:'inl',value:v??'','aria-label':pr.name,onclick:e=>e.stopPropagation(),onchange:e=>save(pr.type==='number'&&e.target.value!==''?Number(e.target.value):e.target.value)});
   if(pr.type==='text')inp.style.maxWidth='160px';return inp;
 }
@@ -648,7 +659,8 @@ function inlineSelect(n,key,list){
   const cur=n.fm[key]||'';const o=optOf(list,cur);
   const s=el('select',{class:'inl'+(cur?' c-'+(o?o.color:'gray'):' empty'),'aria-label':key,onclick:e=>e.stopPropagation(),onchange:async e=>{await saveNote(n,{[key]:e.target.value});}});
   s.append(el('option',{value:''},'—'));for(const x of list)s.append(el('option',{value:x.id},x.name));
-  s.value=list.some(x=>x.id===cur)?cur:'';return s;
+  if(cur&&!list.some(x=>x.id===cur))s.append(el('option',{value:cur},cur+' (설정에 없음)'));  // 모르는 값은 지우지 않고 그대로 둔다
+  s.value=cur;return s;
 }
 function inlineDate(n){
   const late=n.fm.due&&n.fm.due<today()&&n.fm.status!=='done';
@@ -817,9 +829,11 @@ async function completeTodo(n,lineIdx){
 function openNote(n){
   current=n;
   $('#pPath').textContent=n.path;$('#pTitle').value=n.title;
-  $('#pStatus').value=n.fm.status||'';$('#pDue').value=n.fm.due||'';$('#pType').textContent=n.fm.type||'';
+  const ps=$('#pStatus');[...ps.options].filter(o=>o.dataset.extra).forEach(o=>o.remove());
+  if(n.fm.status&&!config.statuses.some(x=>x.id===n.fm.status))ps.append(el('option',{value:n.fm.status,'data-extra':'1'},n.fm.status+' (설정에 없음)'));
+  ps.value=n.fm.status||'';$('#pDue').value=n.fm.due||'';$('#pType').textContent=n.fm.type||'';
   const lb=$('#pLabel');lb.innerHTML='';const cur=new Set(labelsOf(n));
-  for(const o of config.labels){const t=tagEl(o);t.setAttribute('role','button');t.setAttribute('aria-pressed',cur.has(o.id)?'true':'false');t.onclick=()=>t.setAttribute('aria-pressed',t.getAttribute('aria-pressed')==='true'?'false':'true');lb.append(t);}
+  for(const o of [...config.labels,...[...cur].filter(l=>!config.labels.some(x=>x.id===l)).map(l=>({id:l,name:l+' (설정에 없음)',color:'gray'}))]){const t=tagEl(o);t.setAttribute('role','button');t.setAttribute('aria-pressed',cur.has(o.id)?'true':'false');t.onclick=()=>t.setAttribute('aria-pressed',t.getAttribute('aria-pressed')==='true'?'false':'true');lb.append(t);}
   renderPanelProps(n);renderChecklist(n.body);
   $('#pBody').value=n.body.replace(/^#\s+.*\n?/m,'');$('#pMsg').textContent='';
   showPreview(false);renderLinks(n);
@@ -852,7 +866,7 @@ function showPreview(on){
     $('#pPreview').querySelectorAll('a.wl').forEach(a=>a.onclick=e=>{e.preventDefault();const t=notes.find(x=>x.title===a.dataset.wl||x.path.endsWith('/'+a.dataset.wl+'.md'));if(t)openNote(t);else toast('노트를 찾을 수 없습니다');});}
 }
 async function saveNote(n,patch,newTitle,newBody,quiet){
-  const fm={...n.fm,...patch};fm.updated=today();
+  const fm={...n.fm,...patch};const onlyOrder=Object.keys(patch).length===1&&'order'in patch&&newTitle===undefined&&newBody===undefined;if(!onlyOrder)fm.updated=today();
   const title=newTitle??n.title;const body=newBody??n.body.replace(/^#\s+.*\n?/m,'');
   const hasH1=/^#\s+/m.test(n.body)||newTitle!==undefined;
   const raw=buildFM(fm)+(hasH1?`# ${title}\n\n`:'')+body.replace(/^\n+/,'');
@@ -882,7 +896,7 @@ function renderPanelProps(n){
   const box=$('#pProps');box.innerHTML='';
   for(const pr of(config.props||[])){const v=n.fm[pr.id];let inp;
     if(pr.type==='checkbox')inp=el('input',{type:'checkbox',id:'pp_'+pr.id,checked:v===true||v==='true'?'':null});
-    else if(pr.type==='select'){inp=el('select',{id:'pp_'+pr.id});inp.append(el('option',{value:''},'—'));for(const o of(pr.options||[]))inp.append(el('option',{value:o},o));inp.value=v??'';}
+    else if(pr.type==='select'){inp=el('select',{id:'pp_'+pr.id});inp.append(el('option',{value:''},'—'));for(const o of(pr.options||[]))inp.append(el('option',{value:o},o));if(v&&!(pr.options||[]).includes(String(v)))inp.append(el('option',{value:v},v+' (설정에 없음)'));inp.value=v??'';}
     else inp=el('input',{id:'pp_'+pr.id,type:pr.type==='date'?'date':pr.type==='number'?'number':'text',value:v??''});
     box.append(el('label',{for:'pp_'+pr.id},pr.name),inp);}
   // 프론트매터에 있지만 설정에 없는 속성은 읽기 전용으로 보여 준다
@@ -930,7 +944,8 @@ async function moveNote(n,folder,patch={}){
   const path=`${folder}/${n.path.split('/').pop()}`;if(n.path!==path&&notes.some(x=>x.path===path)){toast('대상 폴더에 같은 이름의 노트가 있습니다');return;}
   const fm={...n.fm,...patch,updated:today()};const raw=buildFM(fm)+n.body.replace(/^\n+/,'');
   if(current===n)$('#pMsg').textContent='이동 중…';
-  try{const r=await api.put(path,raw,null,`web: 이동 ${n.title} → ${folder}`);await api.del(n.path,n.sha,`web: 이동 ${n.title} → ${folder}`);
+  let r;try{r=await api.put(path,raw,null,`web: 이동 ${n.title} → ${folder}`);}catch(e){if(current===n)$('#pMsg').textContent='';toast('이동 실패: '+e.message+(isNetErr(e)?' (이동은 온라인에서만)':''),4000);return;}
+  try{try{await api.del(n.path,n.sha,`web: 이동 ${n.title} → ${folder}`);}catch(e){try{await api.del(path,r.content.sha,'web: 이동 취소');}catch{}throw e;}
     Object.assign(n,{path,folder,sha:r.content.sha,raw,fm});saveCache();fillFolders();render();if(current===n){$('#pPath').textContent=path;$('#pMsg').textContent='';}toast(`${folder}로 이동했습니다`);}
   catch(e){if(current===n)$('#pMsg').textContent='';toast('이동 실패: '+e.message+(isNetErr(e)?' (이동은 온라인에서만)':''),4000);}
 }
