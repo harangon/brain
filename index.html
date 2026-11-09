@@ -582,8 +582,9 @@ async function searchEvents(q){
   try{const j=await gcal.call('search',{q});gcalResults=j.events;}catch(e){gcalResults=[];toast('일정 검색 실패: '+e.message,4000);}
   render();
 }
-function evRow(ev,withDate){
-  return el('div',{class:'evrow',role:'button',tabindex:'0',title:'클릭하여 수정',style:'cursor:pointer',onclick:e=>{if(e.target.closest('.x'))return;editEvent(ev);},onkeydown:e=>{if(e.key==='Enter')editEvent(ev);}},
+function evRow(ev,withDate,onPick){
+  const act=onPick||(()=>editEvent(ev));
+  return el('div',{class:'evrow',role:'button',tabindex:'0',title:onPick?'클릭하여 이동':'클릭하여 수정',style:'cursor:pointer',onclick:e=>{if(e.target.closest('.x'))return;act();},onkeydown:e=>{if(e.key==='Enter')act();}},
     el('span',{class:'tm',style:`border-left:3px solid ${gcal.color(ev)};padding-left:6px`},(withDate?ev.start.slice(0,10)+' ':'')+gcal.time(ev)),
     el('span',{},ev.title,ev.location?el('span',{class:'cn'},ev.location):'',(cfg.gcal.cals||[]).length>1?el('span',{class:'cn'},ev.calName):''),
     el('button',{class:'icon x','aria-label':'일정 삭제',onclick:()=>deleteEvent(ev)},'✕'));
@@ -929,7 +930,7 @@ function renderCalendar(m){
     else if(gcalShown.ym!==calMonth)bar.append(el('span',{class:'evnote'},'일정 불러오는 중…'));
     wrap.append(bar);
     if(gcalResults){const box=el('div',{class:'daylist'},el('h3',{},gcalResults==='loading'?'검색 중…':`"${gcalQ}" 검색 결과 · ${gcalResults.length}건`,' ',el('button',{class:'btn sm',onclick:()=>{gcalQ='';gcalResults=null;render();}},'닫기')));
-      if(Array.isArray(gcalResults)){for(const ev of gcalResults){const row=evRow(ev,true);row.style.cursor='pointer';row.onclick=e=>{if(e.target.closest('.x'))return;calSel=ev.start.slice(0,10);calMonth=calSel.slice(0,7);gcalResults=null;render();};box.append(row);}
+      if(Array.isArray(gcalResults)){for(const ev of gcalResults)box.append(evRow(ev,true,()=>{calSel=ev.start.slice(0,10);calMonth=calSel.slice(0,7);gcalResults=null;render();}));
         if(!gcalResults.length)box.append(el('div',{class:'evnote'},'없습니다.'));}
       wrap.append(box);m.append(wrap);return;}
   }
