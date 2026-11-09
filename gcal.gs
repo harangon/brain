@@ -6,15 +6,19 @@
  *       → brain ⚙ → 연결 → Google 캘린더에 URL과 KEY 입력
  * 코드를 고친 뒤에는 "배포 관리 → 새 버전"을 해야 반영된다.
  *
- * 요청:  GET  ?key=KEY&action=calendars
- *        GET  ?key=KEY&action=list&from=2026-11-01&to=2026-12-01&cals=id1,id2
- *        GET  ?key=KEY&action=search&q=치과&cals=…
- *        POST (text/plain JSON) {key, action:"create", cal, title, date, time?, minutes?, desc?}
- *        POST {key, action:"delete", cal, id}
+ * 시간대: 프로젝트 설정(⚙) → "appsscript.json 표시" 체크 → timeZone 을 "Asia/Seoul" 로. (기본이 다르면 시간이 어긋난다)
+ *
+ * 요청(모두 POST, 본문 JSON):
+ *   {key, action:"calendars"}
+ *   {key, action:"list", from:"2026-11-01", to:"2026-12-01", cals:"id1,id2"}
+ *   {key, action:"search", q:"치과", cals:"…"}
+ *   {key, action:"create", cal, title, date, time?, minutes?, desc?}
+ *   {key, action:"delete", cal, id}
  */
 var KEY = 'CHANGE-ME-to-a-long-random-string';
 
-function doGet(e) { return handle_(e.parameter || {}); }
+// GET은 상태 확인용. 키는 URL에 남지 않도록 POST 본문으로만 받는다
+function doGet() { return out_({ ok: true, app: 'brain gcal proxy', tz: Session.getScriptTimeZone() }); }
 function doPost(e) {
   var p = {};
   try { p = JSON.parse(e.postData.contents); } catch (err) { return out_({ error: 'bad json' }); }

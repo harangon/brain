@@ -161,6 +161,19 @@ td input.inl{width:118px}
 .ac button small{color:var(--fg3);margin-left:6px}
 .ptools{display:flex;gap:6px;align-items:center;margin:0 0 6px;font-size:12px;color:var(--fg3)}
 .daylist .add{margin-top:8px}
+.day .it.ev{background:var(--evbg,#e7f1fb);color:var(--fg);border-left:3px solid var(--evc,#4a86c5);padding-left:3px}
+.day .it.ev.allday{border-left:0;background:var(--evc,#4a86c5);color:#fff}
+.evrow{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px}
+.evrow .tm{min-width:92px;color:var(--fg2);font-variant-numeric:tabular-nums}
+.evrow .cn{color:var(--fg3);font-size:11.5px;margin-left:6px}
+.evrow .x{margin-left:auto;opacity:.5}.evrow .x:hover{opacity:1}
+.evbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
+.evbar input{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg2);font-size:13px;min-width:160px}
+.evnote{font-size:12px;color:var(--fg3)}
+.todayev{margin:0 0 12px;padding:8px 12px;border:1px solid var(--line);border-radius:var(--radius);font-size:13px}
+.todayev h4{margin:0 0 4px;font-size:12px;color:var(--fg2);font-weight:500}
+.ask .fields{display:grid;grid-template-columns:auto 1fr;gap:8px 10px;align-items:center;font-size:13px}
+.ask .fields label{color:var(--fg2)}
 .preview ul{padding-left:1.2em}.preview code{background:var(--bg2);padding:1px 4px;border-radius:3px;font-size:.9em}
 .preview a.wl{text-decoration:none;border-bottom:1px solid var(--accent)}
 .pf{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--line);align-items:center}
@@ -341,6 +354,12 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
       <label for="sRepo">저장소</label><input class="w" id="sRepo" placeholder="harangon/drbrain">
       <label for="sBranch">브랜치</label><input class="w" id="sBranch" placeholder="main">
       <label for="sToken">Fine-grained 토큰 (Contents 읽기·쓰기)</label><input class="w" id="sToken" type="password" placeholder="github_pat_…">
+      <h2 style="margin-top:18px">Google 캘린더 (Apps Script)</h2>
+      <p>저장소의 <code>gcal.gs</code>를 Apps Script 웹 앱으로 배포하고 URL과 KEY를 넣습니다. 비워 두면 달력에 볼트 내용만 보입니다.</p>
+      <label for="sGcalUrl">웹 앱 URL</label><input class="w" id="sGcalUrl" placeholder="https://script.google.com/macros/s/…/exec">
+      <label for="sGcalKey">KEY</label><input class="w" id="sGcalKey" type="password" placeholder="gcal.gs의 KEY 값">
+      <div style="margin-top:8px"><button class="btn sm" id="sGcalTest">연결 확인·캘린더 불러오기</button> <span id="sGcalMsg" class="evnote"></span></div>
+      <div id="sGcalCals" style="margin-top:6px"></div>
     </div>
     <div class="mb" data-tab="props" hidden>
       <h2>상태</h2>
@@ -389,6 +408,7 @@ const DEFAULT_CONFIG={
   ]
 };
 let cfg=JSON.parse(localStorage.getItem(LS)||'null')||{repo:'harangon/drbrain',branch:'main',token:''};
+cfg.gcal=cfg.gcal||{url:'',key:'',cals:[],names:{}};
 let config=structuredClone(DEFAULT_CONFIG), configSha=null;
 let notes=[];
 let state={view:'table',folder:'',status:'',label:'',group:'status',sort:'updated:-1',q:'',saved:''};
@@ -402,16 +422,21 @@ const addDays=(d,n)=>{const x=new Date(d+'T00:00:00');x.setDate(x.getDate()+n);r
 function toast(m,ms=1800){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),ms);}
 const saveState=()=>localStorage.setItem('brain.state',JSON.stringify(state));
 /* 브라우저 prompt/confirm 대신 쓰는 앱 내 대화상자. PWA·도킹 패널에서도 동작 */
-function ask(title,{msg='',value='',placeholder='',options=null,ok='확인',danger=false}={}){
+function ask(title,{msg='',value='',placeholder='',options=null,ok='확인',danger=false,fields=null}={}){
   return new Promise(res=>{
     const m=$('#ask'),f=$('#askField');f.innerHTML='';$('#askTitle').textContent=title;$('#askMsg').textContent=msg;$('#askMsg').hidden=!msg;
     let inp=null;
-    if(options){inp=el('select',{});for(const o of options)inp.append(el('option',{value:o.value},o.label));f.append(inp);}
+    let els=null;
+    if(fields){els={};const g=el('div',{class:'fields'});for(const fd of fields){let x;
+        if(fd.options){x=el('select',{});for(const o of fd.options)x.append(el('option',{value:o.value},o.label));x.value=fd.value??'';}
+        else x=el('input',{type:fd.type||'text',value:fd.value??'',placeholder:fd.placeholder||'',autocomplete:'off'});
+        els[fd.id]=x;g.append(el('label',{},fd.label),x);}f.append(g);inp=els[fields[0].id];}
+    else if(options){inp=el('select',{});for(const o of options)inp.append(el('option',{value:o.value},o.label));f.append(inp);}
     else if(value!==null){inp=el('input',{value,placeholder,autocomplete:'off'});f.append(inp);}
     const okb=$('#askOk');okb.textContent=ok;okb.className='btn '+(danger?'danger':'primary');
     const done=v=>{m.classList.remove('on');$('#askForm').onsubmit=null;$('#askCancel').onclick=null;document.removeEventListener('keydown',esc,true);res(v);};
     const esc=e=>{if(e.key==='Escape'){e.stopPropagation();done(null);}};
-    $('#askForm').onsubmit=e=>{e.preventDefault();done(inp?inp.value:true);};
+    $('#askForm').onsubmit=e=>{e.preventDefault();done(els?Object.fromEntries(Object.entries(els).map(([k,x])=>[k,x.value])):(inp?inp.value:true));};
     $('#askCancel').onclick=()=>done(null);document.addEventListener('keydown',esc,true);
     m.classList.add('on');setTimeout(()=>{inp?.focus();inp?.select?.();},30);
   });
@@ -477,6 +502,65 @@ const queue={
   }
 };
 window.addEventListener('online',()=>queue.flush());
+
+/* ===================== Google 캘린더 (Apps Script 프록시) ===================== */
+const gcal={
+  on(){return !!(cfg.gcal.url&&cfg.gcal.key);},
+  async call(action,params={}){
+    const r=await fetch(cfg.gcal.url,{method:'POST',body:JSON.stringify({key:cfg.gcal.key,action,cals:(cfg.gcal.cals||[]).join(','),...params})});
+    if(!r.ok)throw new Error(`Apps Script ${r.status}`);
+    const t=await r.text();let j;try{j=JSON.parse(t);}catch{throw new Error('Apps Script 응답이 JSON이 아닙니다 (배포 설정: 실행 계정 나 · 액세스 모든 사용자)');}
+    if(j.error)throw new Error(j.error==='unauthorized'?'KEY가 맞지 않습니다':j.error);return j;
+  },
+  cache:JSON.parse(localStorage.getItem('brain.gcal')||'{}'),
+  save(){try{localStorage.setItem('brain.gcal',JSON.stringify(gcal.cache));}catch{}},
+  /* 달 단위 조회. 캐시가 5분 이내면 그대로, 아니면 새로 받고 실패 시 캐시 */
+  async month(ym,force){
+    if(!gcal.on())return{events:[],at:null,offline:false};
+    const c=gcal.cache[ym];if(c&&!force&&!c.stale&&Date.now()-c.t<5*60*1000)return{events:c.events,at:c.t,offline:false};
+    const[y,m]=ym.split('-').map(Number);const from=new Date(y,m-1,1);from.setDate(1-((from.getDay()+6)%7));const to=new Date(from);to.setDate(from.getDate()+42);
+    const f=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    try{const j=await gcal.call('list',{from:f(from),to:f(to)});gcal.cache[ym]={t:Date.now(),events:j.events};for(const k of Object.keys(gcal.cache))if(Math.abs(Number(k.slice(0,4))*12+Number(k.slice(5))-(y*12+m))>3)delete gcal.cache[k];gcal.save();return{events:j.events,at:Date.now(),offline:false};}
+    catch(e){if(c)return{events:c.events,at:c.t,offline:true,err:e.message};throw e;}
+  },
+  invalidate(){for(const k of Object.keys(gcal.cache))gcal.cache[k].stale=true;gcal.save();gcalShown.ym='';},
+  /* 종일 이벤트는 end가 다음날 00:00. 날짜별로 펼친다 */
+  byDay(events){const map={};for(const ev of events){const sd=ev.start.slice(0,10);let ed=ev.end.slice(0,10);if(ev.allDay||ev.end.endsWith('T00:00')){const d=new Date(ed+'T00:00');d.setDate(d.getDate()-1);ed=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+    if(ed<sd)ed=sd;for(let d=new Date(sd+'T00:00');;d.setDate(d.getDate()+1)){const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;if(ds>ed)break;(map[ds]??=[]).push(ev);}}return map;},
+  time(ev){return ev.allDay?'종일':ev.start.slice(11)+'–'+ev.end.slice(11);},
+  color(ev){return ev.color||'#4a86c5';}
+};
+async function newEvent(ds){
+  if(!gcal.on()){toast('⚙ → 연결에서 Google 캘린더를 먼저 설정하세요');return;}
+  const cals=(cfg.gcal.cals||[]).map(id=>({value:id,label:cfg.gcal.names?.[id]||id}));
+  const r=await ask('새 일정',{ok:'만들기',fields:[
+    {id:'title',label:'제목',placeholder:'회의'},{id:'date',label:'날짜',type:'date',value:ds},
+    {id:'time',label:'시작',type:'time',value:''},
+    {id:'minutes',label:'길이',options:[{value:'30',label:'30분'},{value:'60',label:'1시간'},{value:'90',label:'1시간 30분'},{value:'120',label:'2시간'},{value:'180',label:'3시간'},{value:'0',label:'종일'}],value:'60'},
+    ...(cals.length>1?[{id:'cal',label:'캘린더',options:cals,value:cals[0].value}]:[])]});
+  if(!r)return;const title=(r.title||'').trim();if(!title){toast('제목이 필요합니다');return;}
+  const body={cal:r.cal||cfg.gcal.cals?.[0]||'',title,date:r.date,desc:''};if(r.minutes!=='0'&&r.time){body.time=r.time;body.minutes=r.minutes;}
+  toast('일정 만드는 중…');
+  try{await gcal.call('create',body);gcal.invalidate();toast(`일정 추가: ${title}`);calSel=r.date;calMonth=r.date.slice(0,7);render();}
+  catch(e){toast('일정 생성 실패: '+e.message,5000);}
+}
+async function deleteEvent(ev){
+  if(!await confirmAsk('일정을 삭제할까요?',`${ev.title} · ${ev.start.slice(0,10)} ${gcal.time(ev)}`,'삭제'))return;
+  try{await gcal.call('delete',{cal:ev.cal,id:ev.id});gcal.invalidate();toast('삭제했습니다');render();}catch(e){toast('삭제 실패: '+e.message,5000);}
+}
+let gcalQ='',gcalResults=null,gcalShown={ym:'',events:[],at:null,offline:false};
+async function searchEvents(q){
+  gcalQ=q;if(!q.trim()){gcalResults=null;render();return;}
+  gcalResults='loading';render();
+  try{const j=await gcal.call('search',{q});gcalResults=j.events;}catch(e){gcalResults=[];toast('일정 검색 실패: '+e.message,4000);}
+  render();
+}
+function evRow(ev,withDate){
+  return el('div',{class:'evrow'},
+    el('span',{class:'tm',style:`border-left:3px solid ${gcal.color(ev)};padding-left:6px`},(withDate?ev.start.slice(0,10)+' ':'')+gcal.time(ev)),
+    el('span',{},ev.title,ev.location?el('span',{class:'cn'},ev.location):'',(cfg.gcal.cals||[]).length>1?el('span',{class:'cn'},ev.calName):''),
+    el('button',{class:'icon x','aria-label':'일정 삭제',onclick:()=>deleteEvent(ev)},'✕'));
+}
 
 /* ===================== 마크다운 / 프론트매터 ===================== */
 /* 프론트매터: Obsidian이 쓰는 블록 리스트(key:\n  - 값)와 따옴표를 그대로 읽고, 쓸 때는 필요한 값만 따옴표로 감싼다 */
@@ -767,6 +851,12 @@ function renderTodo(m){
   const td=today(),wk=addDays(td,7);
   const groups=[['지연',t=>t.due&&t.due<td],['오늘',t=>t.due===td],['7일 내',t=>t.due>td&&t.due<=wk],['이후',t=>t.due>wk],['날짜 없음',t=>!t.due]];
   const wrap=el('div',{class:'todos'});let total=0;
+  if(gcal.on()){const ym=td.slice(0,7);const c=gcal.cache[ym];
+    if(!c||c.stale||Date.now()-c.t>5*60*1000){gcal.month(ym).then(()=>{if(state.view==='todo')render();}).catch(()=>{});}
+    const evs=c?(gcal.byDay(c.events)[td]||[]):[];
+    const box=el('div',{class:'todayev'},el('h4',{},`오늘 일정 · ${evs.length}건${c&&Date.now()-c.t>5*60*1000?' (갱신 중)':''}`));
+    for(const ev of evs)box.append(evRow(ev,false));if(!evs.length)box.append(el('div',{class:'evnote'},c?'없습니다.':'불러오는 중…'));
+    box.append(el('div',{class:'add',style:'margin-top:6px'},el('button',{class:'btn sm',onclick:()=>newEvent(td)},'+ 오늘 일정')));wrap.append(box);}
   for(const[name,f]of groups){
     const list=items.filter(f).sort((a,b)=>(a.due||'9')<(b.due||'9')?-1:1);if(!list.length)continue;total+=list.length;
     wrap.append(el('h3',{},name,el('span',{class:'tag'},String(list.length))));
@@ -794,24 +884,41 @@ function calItems(){
 }
 function renderCalendar(m){
   const items=calItems();const[y,mo]=calMonth.split('-').map(Number);
+  // Google 일정: 캐시된 달이면 바로, 아니면 받아온 뒤 다시 그린다
+  if(gcal.on()&&gcalShown.ym!==calMonth){const want=calMonth;gcal.month(want).then(r=>{if(calMonth!==want)return;gcalShown={ym:want,...r};render();}).catch(e=>{gcalShown={ym:want,events:[],at:null,offline:true,err:e.message};render();});}
+  const evMap=gcal.on()&&gcalShown.ym===calMonth?gcal.byDay(gcalShown.events):{};
   const first=new Date(y,mo-1,1);const start=new Date(first);start.setDate(1-((first.getDay()+6)%7));
   const wrap=el('div',{class:'cal'});
   const title=el('h2',{},`${y}년 ${mo}월`);
   const shift=k=>{const d=new Date(y,mo-1+k,1);calMonth=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;render();};
   wrap.append(el('div',{class:'calh'},el('button',{class:'btn sm',onclick:()=>shift(-1)},'‹'),title,el('button',{class:'btn sm',onclick:()=>shift(1)},'›'),el('button',{class:'btn sm',onclick:()=>{calMonth=today().slice(0,7);calSel=today();render();}},'오늘')));
+  if(gcal.on()){
+    const bar=el('div',{class:'evbar'});
+    const si=el('input',{type:'search',placeholder:'Google 일정 검색 (전 기간)',value:gcalQ,'aria-label':'일정 검색',onkeydown:e=>{if(e.key==='Enter'){e.preventDefault();searchEvents(si.value);}}});
+    bar.append(si,el('button',{class:'btn sm',onclick:()=>searchEvents(si.value)},'검색'),el('button',{class:'btn sm primary',onclick:()=>newEvent(calSel)},'+ 일정'),
+      el('button',{class:'btn sm',title:'Google에서 다시 받기',onclick:()=>{gcal.invalidate();gcalShown.ym='';render();}},'↻'));
+    if(gcalShown.ym===calMonth&&gcalShown.offline)bar.append(el('span',{class:'evnote'},`오프라인 · ${gcalShown.at?new Date(gcalShown.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+' 기준':'일정 없음'}${gcalShown.err?' · '+gcalShown.err:''}`));
+    else if(gcalShown.ym!==calMonth)bar.append(el('span',{class:'evnote'},'일정 불러오는 중…'));
+    wrap.append(bar);
+    if(gcalResults){const box=el('div',{class:'daylist'},el('h3',{},gcalResults==='loading'?'검색 중…':`"${gcalQ}" 검색 결과 · ${gcalResults.length}건`,' ',el('button',{class:'btn sm',onclick:()=>{gcalQ='';gcalResults=null;render();}},'닫기')));
+      if(Array.isArray(gcalResults)){for(const ev of gcalResults){const row=evRow(ev,true);row.style.cursor='pointer';row.onclick=e=>{if(e.target.closest('.x'))return;calSel=ev.start.slice(0,10);calMonth=calSel.slice(0,7);gcalResults=null;render();};box.append(row);}
+        if(!gcalResults.length)box.append(el('div',{class:'evnote'},'없습니다.'));}
+      wrap.append(box);m.append(wrap);return;}
+  }
   const grid=el('div',{class:'calgrid'});for(const d of['월','화','수','목','금','토','일'])grid.append(el('div',{class:'dh'},d));
   const td=today();
   for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const list=items[ds]||[];const cell=el('button',{class:'day'+(d.getMonth()!==mo-1?' other':'')+(ds===td?' today':'')+(ds===calSel?' sel':''),onclick:()=>{calSel=ds;render();}},el('span',{class:'dn'},String(d.getDate())));
+    const evs=evMap[ds]||[];const list=[...evs.map(ev=>({kind:'ev',title:(ev.allDay?'':ev.start.slice(11)+' ')+ev.title,ev})),...(items[ds]||[])];const cell=el('button',{class:'day'+(d.getMonth()!==mo-1?' other':'')+(ds===td?' today':'')+(ds===calSel?' sel':''),onclick:()=>{calSel=ds;render();}},el('span',{class:'dn'},String(d.getDate())));
     const dots=el('span',{class:'dots'});for(let k=0;k<Math.min(list.length,4);k++)dots.append(el('i'));cell.append(dots);
-    list.slice(0,3).forEach(it=>cell.append(el('span',{class:'it '+it.kind+(it.st?' c-'+it.st.color:'')},(it.kind==='todo'?'☐ ':'')+it.title)));
+    list.slice(0,3).forEach(it=>{const sp=el('span',{class:'it '+it.kind+(it.st?' c-'+it.st.color:'')+(it.ev?.allDay?' allday':'')},(it.kind==='todo'?'☐ ':'')+it.title);if(it.ev)sp.style.setProperty('--evc',gcal.color(it.ev));cell.append(sp);});
     if(list.length>3)cell.append(el('span',{class:'it more'},`+${list.length-3}`));
     grid.append(cell);}
   wrap.append(grid);
-  const sel=items[calSel]||[];const dl=el('div',{class:'daylist'},el('h3',{},`${calSel} · ${sel.length}건`));
+  const sel=items[calSel]||[];const selEv=evMap[calSel]||[];const dl=el('div',{class:'daylist'},el('h3',{},`${calSel} · ${sel.length+selEv.length}건`));
+  for(const ev of selEv)dl.append(evRow(ev,false));
   for(const it of sel)dl.append(el('div',{class:'todo'},el('span',{class:'tag'+(it.st?' c-'+it.st.color:'')},it.kind==='todo'?'할 일':it.kind==='daily'?'데일리':(it.st?it.st.name:'마감')),el('span',{class:'tx'},el('button',{onclick:()=>openNote(it.note)},it.title))));
-  if(!sel.length)dl.append(el('div',{style:'color:var(--fg3);font-size:13px'},'이 날짜에 마감·할 일·데일리 노트가 없습니다.'));
-  dl.append(el('div',{class:'add'},el('button',{class:'btn sm',onclick:()=>newWithDue(calSel)},'+ 이 날짜 마감 노트'),' ',el('button',{class:'btn sm',onclick:()=>addTodoOn(calSel)},'+ 이 날짜 할 일')));
+  if(!sel.length&&!selEv.length)dl.append(el('div',{style:'color:var(--fg3);font-size:13px'},gcal.on()?'이 날짜에 일정·마감·할 일이 없습니다.':'이 날짜에 마감·할 일·데일리 노트가 없습니다.'));
+  dl.append(el('div',{class:'add'},...(gcal.on()?[el('button',{class:'btn sm primary',onclick:()=>newEvent(calSel)},'+ 일정'),' ']:[]),el('button',{class:'btn sm',onclick:()=>newWithDue(calSel)},'+ 이 날짜 마감 노트'),' ',el('button',{class:'btn sm',onclick:()=>addTodoOn(calSel)},'+ 이 날짜 할 일')));
   wrap.append(dl);m.append(wrap);
 }
 
@@ -1112,7 +1219,7 @@ function optRow(list,o,listEl){
 let draft=null;
 function openSettings(tab='conn'){
   draft=structuredClone(config);
-  $('#sRepo').value=cfg.repo;$('#sBranch').value=cfg.branch;$('#sToken').value=cfg.token;
+  $('#sRepo').value=cfg.repo;$('#sBranch').value=cfg.branch;$('#sToken').value=cfg.token;$('#sGcalUrl').value=cfg.gcal.url||'';$('#sGcalKey').value=cfg.gcal.key||'';$('#sGcalMsg').textContent='';renderGcalCals(cfg.gcal.cals||[],Object.entries(cfg.gcal.names||{}).map(([id,name])=>({id,name})));
   const st=$('#optStatus');st.innerHTML='';for(const o of draft.statuses)optRow(draft.statuses,o,st);
   const lb=$('#optLabel');lb.innerHTML='';for(const o of draft.labels)optRow(draft.labels,o,lb);
   draft.props=draft.props||[];const pp=$('#optProps');pp.innerHTML='';for(const o of draft.props)propRow(draft.props,o,pp);
@@ -1137,12 +1244,28 @@ function propRow(list,o,listEl){
   listEl.append(row);
 }
 $('#addProp').onclick=()=>{const o={id:'',name:'',type:'text'};draft.props.push(o);propRow(draft.props,o,$('#optProps'));};
+function renderGcalCals(selected,list){
+  const box=$('#sGcalCals');box.innerHTML='';if(!list.length)return;
+  box.append(el('div',{class:'evnote',style:'margin-bottom:4px'},'표시할 캘린더'));
+  for(const c of list)box.append(el('label',{style:'display:flex;gap:6px;align-items:center;font-size:13px;padding:2px 0'},el('input',{type:'checkbox',value:c.id,'data-name':c.name,checked:selected.includes(c.id)?'':null}),el('span',{style:`display:inline-block;width:10px;height:10px;border-radius:50%;background:${c.color||'#999'}`}),c.name,c.primary?el('span',{class:'evnote'},'(기본)'):''));
+}
+$('#sGcalTest').onclick=async()=>{
+  const url=$('#sGcalUrl').value.trim(),key=$('#sGcalKey').value.trim();if(!url||!key){$('#sGcalMsg').textContent='URL과 KEY를 넣으세요';return;}
+  $('#sGcalMsg').textContent='확인 중…';const old=cfg.gcal;cfg.gcal={...old,url,key};
+  try{const j=await gcal.call('calendars');const mine=j.calendars.filter(c=>c.mine);$('#sGcalMsg').textContent=`연결됨 · 캘린더 ${j.calendars.length}개`;
+    const sel=(old.cals&&old.cals.length)?old.cals:mine.filter(c=>c.primary).map(c=>c.id);renderGcalCals(sel,j.calendars);}
+  catch(e){$('#sGcalMsg').textContent='실패: '+e.message;}
+  finally{cfg.gcal=old;}
+};
 $('#addLabel').onclick=()=>{const o={id:'',name:'',color:'gray'};draft.labels.push(o);optRow(draft.labels,o,$('#optLabel'));};
 $('#btnSettings').onclick=()=>openSettings('conn');
 $('#sCancel').onclick=()=>$('#settings').classList.remove('on');
 $('#sSave').onclick=async()=>{
-  const ncfg={repo:$('#sRepo').value.trim()||'harangon/drbrain',branch:$('#sBranch').value.trim()||'main',token:$('#sToken').value.trim()};
-  const connChanged=JSON.stringify(ncfg)!==JSON.stringify(cfg);
+  const gsel=[...document.querySelectorAll('#sGcalCals input:checked')].map(x=>x.value);const gnames={};document.querySelectorAll('#sGcalCals input').forEach(x=>{if(x.checked)gnames[x.value]=x.dataset.name;});
+  const ncfg={repo:$('#sRepo').value.trim()||'harangon/drbrain',branch:$('#sBranch').value.trim()||'main',token:$('#sToken').value.trim(),
+    gcal:{url:$('#sGcalUrl').value.trim().replace(/\/$/,''),key:$('#sGcalKey').value.trim(),cals:gsel.length?gsel:(cfg.gcal.cals||[]),names:gsel.length?gnames:(cfg.gcal.names||{})}};
+  if(JSON.stringify(ncfg.gcal)!==JSON.stringify(cfg.gcal)){gcal.cache={};gcal.save();gcalShown.ym='';}
+  const connChanged=JSON.stringify({...ncfg,gcal:0})!==JSON.stringify({...cfg,gcal:0});
   cfg=ncfg;localStorage.setItem(LS,JSON.stringify(cfg));
   draft.statuses=draft.statuses.filter(o=>o.id&&o.name);draft.labels=draft.labels.filter(o=>o.id&&o.name);draft.props=(draft.props||[]).filter(o=>o.id&&o.name&&!RESERVED.has(o.id));
   const propsChanged=JSON.stringify(draft)!==JSON.stringify(config);
@@ -1158,6 +1281,7 @@ function palCommands(){
   for(const[f,t]of Object.entries(TEMPLATE_OF))c.push({k:'새 노트',n:`${f.replace(/^\d+_/,'')} (${t} 템플릿)`,run:()=>newFromTemplate(f)});
   for(const[v,name]of[['table','표'],['board','보드'],['gallery','갤러리'],['todo','할 일'],['calendar','달력'],['docs','문서']])c.push({k:'뷰',n:name,run:()=>switchView(v)});
   for(const sv of config.views)c.push({k:'저장된 뷰',n:sv.name,run:()=>applyView(sv)});
+  if(gcal.on()){c.push({k:'일정',n:'새 일정',run:()=>newEvent(today())},{k:'일정',n:'일정 검색…',run:async()=>{const q=await ask('일정 검색',{placeholder:'제목·장소 단어'});if(q){await switchView('calendar');searchEvents(q);}}});}
   if(current){const n=current;c.push({k:'이 노트',n:'복제',run:()=>duplicateNote(n)},{k:'이 노트',n:'다른 폴더로 이동',run:()=>moveNotePrompt(n)},{k:'이 노트',n:'보관',run:()=>archiveNote(n)},{k:'이 노트',n:'넓게/좁게 보기',run:()=>$('#panel').classList.toggle('wide')});}
   c.push({k:'동작',n:'새로고침 (캐시 비움)',run:()=>{localStorage.removeItem('brain.cache');load();}});
   c.push({k:'동작',n:'설정',run:()=>openSettings('conn')});

@@ -10,9 +10,12 @@
 - ⋯ 메뉴: 넓게 보기 · 복제 · 폴더 이동 · 보관(90_Archive) · GitHub에서 보기 · 삭제
 - 보드: 드래그로 열 이동(status/label), 같은 열 안 드래그로 순서(`order`)
 - 표: 체크박스 선택 → 일괄 변경. 셀에서 바로 편집
-- 달력: 날짜 선택 → 마감 노트 / 오늘 데일리의 할 일 추가
+- 달력: 날짜 선택 → 마감 노트 / 오늘 데일리의 할 일 추가. Google 캘린더를 연결하면 일정 표시·검색(전 기간)·생성·삭제, 할 일 탭에 오늘 일정
 - Ctrl+K 팔레트, Ctrl+S 저장, Esc 닫기
 - 오프라인: 저장·삭제·새 노트는 큐에 쌓였다가 자동 반영. 다른 기기가 먼저 바꾼 파일은 `(오프라인 사본)`으로 저장. 상단 "대기 N" 배지로 재시도·버리기
+
+## Google 캘린더 연결 (Apps Script 프록시)
+`gcal.gs`를 Google Apps Script 웹 앱으로 배포(실행 계정: 나, 액세스: 모든 사용자)하고, brain ⚙ → 연결에 웹 앱 URL과 KEY를 넣는다. 일정은 매번 Google에서 직접 읽고 쓰며 저장소에는 남지 않는다. 월 단위 5분 캐시, 오프라인이면 마지막 캐시를 "기준 시각"과 함께 표시. KEY는 브라우저에만 저장되고 요청 본문(POST)으로만 보낸다.
 
 ## 설정 파일
 `drbrain/_scripts/brain.config.json` — `statuses`, `labels`, `props`(사용자 속성: id/name/type[text|number|date|select|checkbox]/options), `views`. ⚙ → 속성에서 편집하면 커밋됨. 볼트의 `CLAUDE.md`가 이 파일을 참조.
