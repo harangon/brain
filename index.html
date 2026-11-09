@@ -138,6 +138,8 @@ td input.inl{width:118px}
 .tdside button small{color:var(--fg3)}
 .tdadd{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .tdadd input[type=text]{flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);font-size:14px}
+.tdadd input[type=text]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent);background:var(--bg)}
+.tdadd{padding:2px}
 .tdadd .chips{gap:4px}
 .tdadd .chip{padding:4px 10px;border-radius:14px;border:1px solid var(--line);font-size:12.5px;color:var(--fg2);background:var(--bg)}
 .tdadd .chip[aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
@@ -990,7 +992,7 @@ function renderTodo(m){
 
   // 빠른 추가
   const targets=[['daily','데일리 노트'],...notes.filter(n=>['10_Projects','20_Areas'].includes(n.folder)&&n.fm.status!=='archived'&&n.fm.status!=='done').sort((a,b)=>a.title.localeCompare(b.title)).map(n=>[n.path,n.title])];
-  const inp=el('input',{type:'text',placeholder:'할 일 적고 Enter — "금요일 보고서", "11/20 치과"처럼 날짜를 같이 써도 됩니다',autocomplete:'off','aria-label':'할 일 추가'});
+  const inp=el('input',{type:'text',placeholder:'할 일 적고 Enter (예: 금요일 보고서, 11/20 치과)',autocomplete:'off','aria-label':'할 일 추가'});
   const chips=el('div',{class:'chips',role:'group','aria-label':'날짜'});
   const dateIn=el('input',{type:'date',class:'chipdate','aria-label':'날짜 선택',value:todoDate,onchange:()=>{todoDate=dateIn.value;todoDue=todoDate?'date':'today';paint();inp.focus();}});
   const dueOpts=[['today','오늘',()=>td],['tomorrow','내일',()=>addDays(td,1)],['date','날짜…',()=>todoDate||null],['none','나중에',()=>null]];
