@@ -206,6 +206,54 @@ td input.inl{width:118px}
 .preview h1,.preview h2,.preview h3{margin:.8em 0 .3em;line-height:1.3}
 .preview img{max-width:100%;border-radius:4px}
 .pb{position:relative}
+/* 트렐로식 카드 보기 (문서 탭의 도킹 편집기에서는 쓰지 않음) */
+.panel.cardmode .pb,.panel.cardmode .pf{display:none}
+.panel.cardmode .card-v{display:flex}
+.card-v{flex:1;overflow:auto;padding:14px 18px 24px;display:flex;flex-direction:column;gap:18px}
+.card-v .ctitle{font-size:20px;font-weight:700;border:1px solid transparent;border-radius:6px;padding:4px 6px;margin:0 -6px;width:calc(100% + 12px);background:transparent;font-family:inherit;color:var(--fg)}
+.card-v .ctitle:hover{border-color:var(--line)}.card-v .ctitle:focus{outline:none;border-color:var(--accent);background:var(--bg)}
+.card-v .chiprow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.card-v .chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:14px;border:1px solid var(--line);font-size:12.5px;color:var(--fg2);background:var(--bg);cursor:pointer;position:relative}
+.card-v .chip:hover{background:var(--bg2)}
+.card-v .chip.set{color:var(--fg);font-weight:500}
+.card-v .chip .tag{margin:-1px -4px}
+.card-v .chip input[type=date]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.card-v .chip select{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.card-v section{display:flex;flex-direction:column;gap:8px}
+.card-v h3{margin:0;font-size:13px;font-weight:600;color:var(--fg2);display:flex;align-items:center;gap:8px}
+.card-v h3 .sp{flex:1}
+.card-v h3 .btn{font-weight:400}
+.card-v .desc{font-size:14px;line-height:1.6;border:1px solid transparent;border-radius:8px;padding:8px 10px;margin:0 -10px;cursor:text;min-height:40px}
+.card-v .desc:hover{border-color:var(--line);background:var(--bg2)}
+.card-v .desc.empty{color:var(--fg3)}
+.card-v .desc h1,.card-v .desc h2,.card-v .desc h3{font-size:1.05em;margin:.6em 0 .2em}
+.card-v .desc img{max-width:100%;border-radius:6px}
+.card-v .dedit textarea{width:100%;min-height:200px;font:13.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:10px;border:1px solid var(--accent);border-radius:8px;background:var(--bg);color:var(--fg);resize:vertical}
+.card-v .dedit .row{display:flex;gap:6px;margin-top:6px;align-items:center}
+.card-v .cl{border:1px solid var(--line);border-radius:8px;padding:8px 12px 10px;display:flex;flex-direction:column;gap:2px}
+.card-v .cl .clh{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.card-v .cl .clh b{font-size:13.5px;font-weight:600}
+.card-v .cl .clh .x{margin-left:auto;opacity:.5}.card-v .cl .clh .x:hover{opacity:1}
+.card-v .cl .clbar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:2px 0 6px}
+.card-v .cl .clbar b{display:block;height:100%;background:var(--accent)}
+.card-v .cl .clbar.full b{background:#3ba55d}
+.card-v .ci{display:flex;gap:8px;align-items:flex-start;padding:4px 2px;border-radius:4px;font-size:13.5px}
+.card-v .ci:hover{background:var(--bg2)}
+.card-v .ci input[type=checkbox]{margin-top:3px}
+.card-v .ci.done span.t{color:var(--fg3);text-decoration:line-through}
+.card-v .ci .t{flex:1}
+.card-v .ci .due{font-size:11.5px;color:var(--fg2);white-space:nowrap;padding-top:2px}
+.card-v .ci .x{opacity:0;font-size:12px}.card-v .ci:hover .x{opacity:.6}
+.card-v .cl .add input{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg2);font-size:13px;margin-top:4px}
+.card-v .att{display:flex;gap:8px;flex-wrap:wrap}
+.card-v .att img{width:96px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.card-v .act{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--fg2)}
+.card-v .act div{display:flex;gap:8px}
+.card-v .act time{color:var(--fg3);white-space:nowrap;font-variant-numeric:tabular-nums}
+.card-v .actions{display:flex;gap:6px;flex-wrap:wrap;padding-top:6px;border-top:1px solid var(--line)}
+.card-v .actions .btn{font-size:12.5px}
+.card-v .links{margin-top:0}
+@media (max-width:640px){.card-v{padding:12px 14px 24px}}
 .ac{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.12);max-height:220px;overflow:auto;min-width:220px;display:none}
 .ac.on{display:block}
 .ac button{display:block;width:100%;text-align:left;padding:6px 10px;font-size:13px;background:none;border:0;color:var(--fg)}
@@ -378,6 +426,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
     <button class="btn sm" id="pToggle">미리보기</button>
     <button class="icon" id="pMore" aria-label="더 보기" aria-haspopup="true">⋯</button>
   </div>
+  <div class="card-v" id="card" hidden></div>
   <div class="pb">
     <input class="ti" id="pTitle" placeholder="제목" aria-label="제목">
     <div class="props">
@@ -1191,9 +1240,12 @@ async function openNote(n){
   $('#pBody').value=stripH1(n.body);$('#pMsg').textContent='';
   showPreview(false);renderLinks(n);
   const p=$('#panel');p.classList.add('open');p.setAttribute('aria-hidden','false');
+  // 문서 탭(도킹)은 마크다운 편집기, 그 외는 트렐로식 카드
+  const cardmode=!p.classList.contains('docked');p.classList.toggle('cardmode',cardmode);$('#card').hidden=!cardmode;$('#pToggle').style.display=cardmode?'none':'';
+  if(cardmode){descEditing=false;renderCard(n);}
   if(p.classList.contains('docked')){p.querySelector('.editor .empty, .empty')?.remove();docsEl?.querySelectorAll('.tree .tn').forEach(b=>b.setAttribute('aria-current',b.textContent===n.title?'true':'false'));}
   else $('#dim').classList.add('on');
-  if(window.innerWidth>640)setTimeout(()=>$('#pBody').focus(),50);
+  if(window.innerWidth>640&&!cardmode)setTimeout(()=>$('#pBody').focus(),50);
 }
 const linkTargets=n=>[...new Set([...n.body.matchAll(/\[\[([^\]|#]+)/g)].map(m=>m[1].trim()).concat(Array.isArray(n.fm.related)?n.fm.related.map(s=>s.replace(/^\[\[|\]\]$/g,'').split('|')[0].trim()):[]))];
 const findNote=name=>notes.find(x=>x.title===name||x.path.endsWith('/'+name+'.md')||x.path===name+'.md');
@@ -1204,7 +1256,7 @@ function renderLinks(n){
   if(out.length){box.append(el('h4',{},'이 노트가 가리키는 곳'));for(const t of out)box.append(mk(t,findNote(t)));}
   if(back.length){box.append(el('h4',{},'이 노트를 가리키는 노트'));for(const x of back)box.append(mk(x.title,x));}
 }
-function isDirty(){if(!current)return false;if($('#pTitle').value.trim()!==current.title)return true;if($('#pBody').value!==stripH1(current.body))return true;
+function isDirty(){if(!current)return false;if($('#panel').classList.contains('cardmode'))return descEditing&&$('#card .dedit textarea')&&$('#card .dedit textarea').value!==stripH1(current.body);if($('#pTitle').value.trim()!==current.title)return true;if($('#pBody').value!==stripH1(current.body))return true;
   const pp=panelPatch();return ['status','due'].some(k=>(pp[k]||'')!==(current.fm[k]||''))||JSON.stringify(labelsOf({fm:{label:pp.label}}))!==JSON.stringify(labelsOf(current));}
 async function guardDirty(){if(!isDirty())return true;return confirmAsk('저장하지 않은 변경이 있습니다',`"${current.title}" — 저장하지 않고 넘어갈까요?`,'저장 안 함');}
 async function closePanel(){
@@ -1234,7 +1286,7 @@ async function saveNoteNow(n,patch,newTitle,newBody,quiet,retry){
   const hasH1=!!h1Of(n.body)||(newTitle!==undefined&&newTitle!==n.title);
   const raw=buildFM(fm)+(hasH1?`# ${title}\n\n`:'')+body.replace(/^\n+/,'');
   if(current===n)$('#pMsg').textContent='저장 중…';
-  const apply=sha=>{Object.assign(n,{sha,raw,fm,body:(hasH1?`# ${title}\n\n`:'')+body,title:hasH1?title:fileTitle(n.path)});saveCache();if(current===n)$('#pMsg').textContent='';render();};
+  const apply=sha=>{Object.assign(n,{sha,raw,fm,body:(hasH1?`# ${title}\n\n`:'')+body,title:hasH1?title:fileTitle(n.path)});if(current===n&&$('#panel').classList.contains('cardmode')&&!descEditing)setTimeout(()=>renderCard(n),0);saveCache();if(current===n)$('#pMsg').textContent='';render();};
   try{
     const r=await api.put(n.path,raw,n.sha,`web: ${title}`);
     apply(r.content.sha);if(!quiet)toast('저장했습니다');
@@ -1324,7 +1376,7 @@ $('#pDelete').onclick=async()=>{if(!current||!await confirmAsk('삭제할까요?
   catch(e){if(isNetErr(e)){queue.push({op:'del',path:n.path,message:`web: 삭제 ${n.title}`});done();toast('오프라인 — 연결되면 삭제됩니다');}else toast('삭제 실패: '+e.message,4000);}};
 $('#pClose').onclick=closePanel;$('#dim').onclick=closePanel;
 $('#pToggle').onclick=()=>showPreview($('#pPreview').hidden);
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#settings').classList.contains('on')){$('#settings').classList.remove('on');return;}if($('#palette').classList.contains('on'))return;if(current)closePanel();}if((e.ctrlKey||e.metaKey)&&e.key==='s'&&current){e.preventDefault();$('#pSave').click();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#settings').classList.contains('on')){$('#settings').classList.remove('on');return;}if($('#palette').classList.contains('on'))return;if(current)closePanel();}if((e.ctrlKey||e.metaKey)&&e.key==='s'&&current){e.preventDefault();if($('#panel').classList.contains('cardmode')){const b=$('#card .dedit .btn.primary');b&&b.click();}else $('#pSave').click();}});
 
 /* ===================== 빠른 입력 ===================== */
 $('#quick').onsubmit=async e=>{
@@ -1373,6 +1425,100 @@ async function addTodoOn(ds){
   await addTodoLine(`01_Daily/${today()}.md`,text,ds);
 }
 
+/* ===================== 트렐로식 카드 보기 ===================== */
+let descEditing=false;const actCache={};
+/* 본문을 설명 / 체크리스트 묶음으로 나눈다. 묶음 = 가장 가까운 ## 제목 아래의 - [ ] 줄들 */
+function splitBody(body){
+  const lines=stripH1(body).split('\n');const groups=[];let cur=null,heading='',headLine=-1;const descLines=[];
+  lines.forEach((ln,i)=>{const h=ln.match(/^(#{2,6})\s+(.+)$/);
+    if(h){heading=h[2].trim();headLine=i;cur=null;descLines.push({i,ln,h:true});return;}
+    const t=parseTodo(ln);
+    if(t){if(!cur||cur.heading!==heading){cur={heading,headLine,items:[]};groups.push(cur);}cur.items.push({...t,line:i});return;}
+    descLines.push({i,ln});});
+  // 내용이 전혀 없는 ## 섹션은 빈 체크리스트로 본다
+  const heads=descLines.filter(d=>d.h);for(const d of heads){const next=heads.find(x=>x.i>d.i);const end=next?next.i:lines.length;const content=lines.slice(d.i+1,end);if(content.every(l=>!l.trim())&&!groups.some(g=>g.headLine===d.i)){groups.push({heading:d.ln.replace(/^#+\s+/,'').trim(),headLine:d.i,items:[],empty:true});}}
+  groups.sort((a,b)=>a.headLine-b.headLine);
+  // 설명: 체크리스트만 들어 있던 제목 줄은 뺀다
+  const onlyCl=new Set(groups.map(g=>g.headLine));
+  const desc=descLines.filter(d=>!(d.h&&onlyCl.has(d.i)&&!descLines.some(x=>!x.h&&x.i>d.i&&x.ln.trim()&&(lines.slice(d.i+1,x.i).every(l=>parseTodo(l)||!l.trim()))))&&!(d.h&&groups.some(g=>g.headLine===d.i&&g.empty))).map(d=>d.ln).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  return{groups,desc,lines};
+}
+function renderCard(n){
+  const box=$('#card');box.innerHTML='';const{groups,desc}=splitBody(n.body);
+  // 제목
+  const ti=el('input',{class:'ctitle',value:n.title,'aria-label':'제목',onkeydown:e=>{if(e.key==='Enter'){e.preventDefault();ti.blur();}},onblur:async()=>{const t=ti.value.trim();if(t&&t!==n.title)await saveNote(n,{},t,undefined,true);else ti.value=n.title;}});
+  box.append(ti);
+  // 칩 줄: 상태 · 라벨 · 마감 · 폴더
+  const chips=el('div',{class:'chiprow'});
+  const st=statusOpt(n.fm.status);const stChip=el('span',{class:'chip'+(n.fm.status?' set':''),title:'상태'},n.fm.status?(st?tagEl(st):n.fm.status):'+ 상태');
+  const stSel=el('select',{'aria-label':'상태',onchange:async e=>{await saveNote(n,{status:e.target.value},undefined,undefined,true);}});stSel.append(el('option',{value:''},'—'));for(const o of config.statuses)stSel.append(el('option',{value:o.id},o.name));if(n.fm.status&&!config.statuses.some(o=>o.id===n.fm.status))stSel.append(el('option',{value:n.fm.status},n.fm.status));stSel.value=n.fm.status||'';stChip.append(stSel);chips.append(stChip);
+  const ls=labelsOf(n);const lbChip=el('button',{class:'chip'+(ls.length?' set':''),title:'라벨',onclick:e=>{e.stopPropagation();labelPicker(n,lbChip);}},...(ls.length?ls.map(l=>tagEl(labelOpt(l),l)):['+ 라벨']));chips.append(lbChip);
+  const dueChip=el('span',{class:'chip'+(n.fm.due?' set':''),title:'마감'},n.fm.due?'📅 '+fmtDue(n.fm.due)+(isLate(n)?' · 지남':''):'+ 마감');
+  const dueIn=el('input',{type:'date','aria-label':'마감',value:n.fm.due||'',onchange:async e=>{await saveNote(n,{due:e.target.value},undefined,undefined,true);}});dueChip.append(dueIn);if(isLate(n))dueChip.style.color='var(--danger)';chips.append(dueChip);
+  chips.append(el('button',{class:'chip',title:'폴더 이동',onclick:()=>moveNotePrompt(n)},n.folder.replace(/^\d+_/,'')+(n.path.split('/').length>2?'/'+n.path.split('/').slice(1,-1).join('/'):'')));
+  for(const pr of(config.props||[])){const v=n.fm[pr.id];if(v===''||v===undefined||v===false)continue;chips.append(el('span',{class:'chip set',title:pr.name},`${pr.name}: ${v===true?'✓':v}`));}
+  box.append(chips);
+  // 설명
+  const sec=el('section',{});sec.append(el('h3',{},'설명',el('span',{class:'sp'}),descEditing?'':el('button',{class:'btn sm',onclick:()=>{descEditing=true;renderCard(n);}},desc?'편집':'추가')));
+  if(descEditing){
+    const ta=el('textarea',{spellcheck:'false','aria-label':'본문 마크다운'});ta.value=stripH1(n.body);
+    const ed=el('div',{class:'dedit'},ta,el('div',{class:'row'},el('button',{class:'btn primary sm',onclick:async()=>{descEditing=false;await saveNote(n,{},undefined,ta.value,true);renderCard(n);}},'저장'),el('button',{class:'btn sm',onclick:()=>{descEditing=false;renderCard(n);}},'취소'),el('span',{class:'evnote'},'마크다운 전체를 편집합니다 (체크리스트 포함)')));
+    sec.append(ed);box.append(sec);setTimeout(()=>ta.focus(),30);
+  }else{
+    const d=el('div',{class:'desc'+(desc?'':' empty'),onclick:e=>{if(e.target.closest('a'))return;descEditing=true;renderCard(n);}});
+    if(desc){d.innerHTML=mdToHtml(desc);d.querySelectorAll('img[data-src]').forEach(async im=>{const u=im.dataset.src;if(/^https?:/.test(u)){im.src=u;return;}const path=decodeURI(u.replace(/^\.?\//,''));const key='img:'+path;if(imgCache[key]){im.src=imgCache[key];return;}try{const b=await api.fileB64(path);if(b){const ext=path.split('.').pop().toLowerCase();im.src=imgCache[key]=`data:${ext==='svg'?'image/svg+xml':ext==='jpg'?'image/jpeg':'image/'+ext};base64,${b}`;}}catch{}});
+      d.querySelectorAll('a.wl').forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();const t=findNote(a.dataset.wl);t?openNote(t):toast('아직 없는 노트입니다');});}
+    else d.textContent='설명 추가…';
+    sec.append(d);box.append(sec);
+  }
+  // 체크리스트
+  const cls=el('section',{});cls.append(el('h3',{},'체크리스트',el('span',{class:'sp'}),el('button',{class:'btn sm',onclick:async()=>{const name=(await ask('새 체크리스트',{placeholder:'이름 (예: 준비)',value:'체크리스트'})||'').trim();if(!name)return;
+    const body=stripH1(n.body).replace(/\s*$/,'')+`\n\n## ${name}\n`;await saveNote(n,{},undefined,body,true);}},'+ 체크리스트')));
+  for(const g of groups){
+    const done=g.items.filter(i=>i.done).length,pct=g.items.length?Math.round(done/g.items.length*100):0;
+    const cl=el('div',{class:'cl'});
+    cl.append(el('div',{class:'clh'},el('b',{},g.heading||'체크리스트'),el('span',{class:'evnote'},`${done}/${g.items.length}`),g.heading?el('button',{class:'icon x','aria-label':'체크리스트 삭제',title:'이 묶음의 항목을 모두 지웁니다',onclick:async()=>{if(g.items.length&&!await confirmAsk('체크리스트를 지울까요?',`"${g.heading}"의 항목 ${g.items.length}개가 지워집니다.`,'지우기'))return;const lines=stripH1(n.body).split('\n');const del=new Set([g.headLine,...g.items.map(i=>i.line)]);if(g.headLine>=0&&lines[g.headLine+1]!==undefined&&!lines[g.headLine+1].trim()&&!g.items.length)del.add(g.headLine+1);await saveNote(n,{},undefined,lines.filter((_,i)=>!del.has(i)).join('\n'),true);}},'✕'):''));
+    cl.append(el('div',{class:'clbar'+(done===g.items.length&&g.items.length?' full':'')},el('b',{style:`width:${pct}%`})));
+    for(const it of g.items){
+      const ci=el('div',{class:'ci'+(it.done?' done':'')});
+      ci.append(el('input',{type:'checkbox',checked:it.done?'':null,'aria-label':'완료',onchange:async e=>{const lines=stripH1(n.body).split('\n');const m=lines[it.line].match(TODO_RE);if(!m)return;lines[it.line]=todoLine(m[1],m[3],{done:e.target.checked,due:it.due});await saveNote(n,{},undefined,lines.join('\n'),true);}}),
+        el('span',{class:'t'},it.text.replace(/📅\s*\d{4}-\d{2}-\d{2}/,'').trim()),it.due?el('span',{class:'due'},fmtDue(it.due)):'',
+        el('button',{class:'icon x','aria-label':'항목 삭제',onclick:async()=>{const lines=stripH1(n.body).split('\n');lines.splice(it.line,1);await saveNote(n,{},undefined,lines.join('\n'),true);}},'✕'));
+      cl.append(ci);}
+    const add=el('input',{placeholder:'+ 항목 (Enter) — "금요일 보고서"처럼 날짜도 됩니다','aria-label':'항목 추가',onkeydown:async e=>{if(e.key!=='Enter')return;e.preventDefault();const raw=add.value.trim();if(!raw)return;const w=parseWhen(raw);const text=w?w.rest:raw;if(!text)return;
+      const lines=stripH1(n.body).split('\n');const last=g.items.length?g.items[g.items.length-1].line:g.headLine;lines.splice(last+1,0,`- [ ] ${text}${w?' 📅 '+w.due:''}`);add.value='';await saveNote(n,{},undefined,lines.join('\n'),true);}});
+    cl.append(el('div',{class:'add'},add));cls.append(cl);
+  }
+  if(!groups.length)cls.append(el('div',{class:'evnote'},'없습니다. "+ 체크리스트"로 만들거나 설명에 - [ ] 줄을 쓰세요.'));
+  box.append(cls);
+  // 첨부
+  const imgs=[...stripH1(n.body).matchAll(/!\[[^\]]*\]\(([^)\s]+)\)|!\[\[([^\]|]+\.(?:png|jpe?g|gif|webp|svg))(?:\|[^\]]*)?\]\]/gi)].map(m=>m[1]||('_attachments/'+m[2]));
+  const at=el('section',{});at.append(el('h3',{},'첨부',el('span',{class:'sp'}),el('button',{class:'btn sm',onclick:()=>$('#pFile').click()},'+ 이미지')));
+  if(imgs.length){const row=el('div',{class:'att'});for(const u of imgs){const im=el('img',{alt:u.split('/').pop(),title:u});row.append(im);(async()=>{if(/^https?:/.test(u)){im.src=u;return;}const path=decodeURI(u.replace(/^\.?\//,''));const key='img:'+path;if(imgCache[key]){im.src=imgCache[key];return;}try{const b=await api.fileB64(path);if(b){const ext=path.split('.').pop().toLowerCase();im.src=imgCache[key]=`data:${ext==='svg'?'image/svg+xml':ext==='jpg'?'image/jpeg':'image/'+ext};base64,${b}`;}}catch{}})();}at.append(row);}
+  else at.append(el('div',{class:'evnote'},'없습니다. 붙여넣기·드래그로도 넣을 수 있습니다.'));
+  box.append(at);
+  // 연결 (링크·백링크)
+  const lk=el('section',{});lk.append(el('h3',{},'연결'));const lbox=el('div',{class:'links'});lk.append(lbox);box.append(lk);
+  {const out=linkTargets(n);const back=notes.filter(x=>x!==n&&linkTargets(x).some(t=>findNote(t)===n));const mk=(name,target)=>el('button',{onclick:()=>target?openNote(target):toast('아직 없는 노트입니다')},name+(target?'':' (없음)'));
+    if(out.length){lbox.append(el('h4',{},'이 노트가 가리킴'));for(const t of out)lbox.append(mk(t,findNote(t)));}
+    if(back.length){lbox.append(el('h4',{},'이 노트를 가리킴'));for(const b of back)lbox.append(mk(b.title,b));}
+    if(!out.length&&!back.length)lbox.append(el('div',{class:'evnote'},'없습니다. 설명에 [[노트 제목]]을 쓰면 연결됩니다.'));}
+  // 활동 (GitHub 커밋)
+  const act=el('section',{});act.append(el('h3',{},'활동'));const al=el('div',{class:'act'},el('span',{class:'evnote'},'불러오는 중…'));act.append(al);box.append(act);
+  (async()=>{try{const key=n.path+'@'+n.sha;let cs=actCache[key];if(!cs){cs=await api.req(`/repos/${cfg.repo}/commits?path=${encodeURIComponent(n.path)}&per_page=6&sha=${cfg.branch}`);actCache[key]=cs;}
+    al.innerHTML='';for(const c of cs){const d=new Date(c.commit.author.date);al.append(el('div',{},el('time',{},d.toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})),el('span',{},c.commit.message.split('\n')[0])));}
+    if(!cs.length)al.append(el('span',{class:'evnote'},'기록 없음'));}catch{al.innerHTML='';al.append(el('span',{class:'evnote'},'기록을 불러오지 못했습니다'));}})();
+  // 동작
+  box.append(el('div',{class:'actions'},
+    el('button',{class:'btn sm',onclick:()=>$('#panel').classList.toggle('wide')},'넓게'),
+    el('button',{class:'btn sm',onclick:()=>duplicateNote(n)},'복제'),
+    el('button',{class:'btn sm',onclick:()=>moveNotePrompt(n)},'이동'),
+    n.folder!=='90_Archive'?el('button',{class:'btn sm',onclick:()=>archiveNote(n)},'보관'):'',
+    el('button',{class:'btn sm',onclick:()=>window.open(`https://github.com/${cfg.repo}/blob/${cfg.branch}/${encodeURI(n.path)}`,'_blank')},'GitHub'),
+    el('span',{class:'sp'}),
+    el('button',{class:'btn sm danger',onclick:()=>$('#pDelete').click()},'삭제')));
+}
+
 /* ===================== 이미지 첨부 ===================== */
 const imgCache={};
 const readB64=f=>new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result.split(',')[1]);fr.readAsDataURL(f);});
@@ -1399,6 +1545,7 @@ async function attachFiles(files){
     const md=`![${base}](${path})`;const st=ta.selectionStart??ta.value.length;
     ta.value=ta.value.slice(0,st)+(st>0&&ta.value[st-1]!=='\n'?'\n':'')+md+'\n'+ta.value.slice(st);
     $('#pMsg').textContent=`첨부됨: ${name} (저장을 눌러야 본문에 반영)`;}
+  if($('#panel').classList.contains('cardmode')&&current){await saveNote(current,{},undefined,ta.value,true);}
 }
 $('#pAttach').onclick=()=>$('#pFile').click();
 $('#pFile').onchange=e=>{attachFiles([...e.target.files]);e.target.value='';};
