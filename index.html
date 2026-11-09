@@ -223,7 +223,12 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
 .calgrid .dh{padding:4px 6px;font-size:12px;color:var(--fg2);border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--bg2)}
 .day{min-height:92px;padding:4px 5px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);font-size:12px;cursor:pointer;text-align:left;vertical-align:top;color:inherit}
 .day.other{color:var(--fg3);background:var(--bg2)}
-.day.today .dn{background:var(--fg);color:var(--bg);border-radius:10px;padding:0 6px}
+.day.today{background:color-mix(in srgb,var(--accent) 10%,var(--bg));box-shadow:inset 0 0 0 2px var(--accent)}
+.day.today .dn{background:var(--accent);color:#fff;border-radius:10px;padding:0 7px;font-weight:600}
+.day.today .dn::after{content:' 오늘';font-size:10px;font-weight:500}
+.day.sel.today{outline-color:var(--fg)}
+.day.dropover{background:var(--bg3)}
+.day .it.ev{cursor:grab}
 .day.sel{outline:2px solid var(--accent);outline-offset:-2px}
 .day .dn{display:inline-block;font-weight:500;margin-bottom:3px}
 .day .it{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:1px 4px;border-radius:3px;margin-bottom:2px;font-size:11.5px}
@@ -544,11 +549,33 @@ async function newEvent(ds){
   try{await gcal.call('create',body);gcal.invalidate();toast(`일정 추가: ${title}`);calSel=r.date;calMonth=r.date.slice(0,7);render();}
   catch(e){toast('일정 생성 실패: '+e.message,5000);}
 }
+function minutesOf(ev){const a=new Date(ev.start),b=new Date(ev.end);return Math.max(0,Math.round((b-a)/60000));}
+async function editEvent(ev){
+  const mins=minutesOf(ev);const opts=[30,60,90,120,180,240,480].map(v=>({value:String(v),label:v<60?v+'분':(v/60)+'시간'+(v%60?' '+v%60+'분':'')}));
+  if(!ev.allDay&&!opts.some(o=>o.value===String(mins)))opts.push({value:String(mins),label:`${mins}분`});opts.push({value:'0',label:'종일'});
+  const r=await ask('일정 수정'+(ev.recurring?' (반복 일정 · 이 회차만)':''),{ok:'저장',fields:[
+    {id:'title',label:'제목',value:ev.title},{id:'date',label:'날짜',type:'date',value:ev.start.slice(0,10)},
+    {id:'time',label:'시작',type:'time',value:ev.allDay?'':ev.start.slice(11)},
+    {id:'minutes',label:'길이',options:opts,value:ev.allDay?'0':String(mins)},
+    {id:'location',label:'장소',value:ev.location||''}]});
+  if(!r)return;const title=(r.title||'').trim();if(!title){toast('제목이 필요합니다');return;}
+  const body={cal:ev.cal,id:ev.id,origDate:ev.start.slice(0,10),title,location:r.location||'',date:r.date,allDay:r.minutes==='0'||!r.time};
+  if(!body.allDay){body.time=r.time;body.minutes=r.minutes;}
+  toast('저장 중…');
+  try{await gcal.call('update',body);gcal.invalidate();toast('일정을 수정했습니다');calSel=r.date;calMonth=r.date.slice(0,7);render();}
+  catch(e){toast('수정 실패: '+e.message,5000);}
+}
+async function moveEventTo(ev,ds){
+  if(ds===ev.start.slice(0,10))return;
+  const body={cal:ev.cal,id:ev.id,origDate:ev.start.slice(0,10),date:ds,allDay:ev.allDay};if(!ev.allDay){body.time=ev.start.slice(11);body.minutes=minutesOf(ev);}
+  toast('옮기는 중…');
+  try{await gcal.call('update',body);gcal.invalidate();toast(`${ev.title} → ${ds}`);calSel=ds;render();}catch(e){toast('이동 실패: '+e.message,5000);}
+}
 async function deleteEvent(ev){
   if(!await confirmAsk('일정을 삭제할까요?',`${ev.title} · ${ev.start.slice(0,10)} ${gcal.time(ev)}`,'삭제'))return;
-  try{await gcal.call('delete',{cal:ev.cal,id:ev.id});gcal.invalidate();toast('삭제했습니다');render();}catch(e){toast('삭제 실패: '+e.message,5000);}
+  try{await gcal.call('delete',{cal:ev.cal,id:ev.id,origDate:ev.start.slice(0,10)});gcal.invalidate();toast('삭제했습니다');render();}catch(e){toast('삭제 실패: '+e.message,5000);}
 }
-let gcalQ='',gcalResults=null,gcalShown={ym:'',events:[],at:null,offline:false};
+let gcalQ='',gcalResults=null,gcalShown={ym:'',events:[],at:null,offline:false},dragEv=null;
 async function searchEvents(q){
   gcalQ=q;if(!q.trim()){gcalResults=null;render();return;}
   gcalResults='loading';render();
@@ -556,7 +583,7 @@ async function searchEvents(q){
   render();
 }
 function evRow(ev,withDate){
-  return el('div',{class:'evrow'},
+  return el('div',{class:'evrow',role:'button',tabindex:'0',title:'클릭하여 수정',style:'cursor:pointer',onclick:e=>{if(e.target.closest('.x'))return;editEvent(ev);},onkeydown:e=>{if(e.key==='Enter')editEvent(ev);}},
     el('span',{class:'tm',style:`border-left:3px solid ${gcal.color(ev)};padding-left:6px`},(withDate?ev.start.slice(0,10)+' ':'')+gcal.time(ev)),
     el('span',{},ev.title,ev.location?el('span',{class:'cn'},ev.location):'',(cfg.gcal.cals||[]).length>1?el('span',{class:'cn'},ev.calName):''),
     el('button',{class:'icon x','aria-label':'일정 삭제',onclick:()=>deleteEvent(ev)},'✕'));
@@ -909,9 +936,10 @@ function renderCalendar(m){
   const grid=el('div',{class:'calgrid'});for(const d of['월','화','수','목','금','토','일'])grid.append(el('div',{class:'dh'},d));
   const td=today();
   for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const evs=evMap[ds]||[];const list=[...evs.map(ev=>({kind:'ev',title:(ev.allDay?'':ev.start.slice(11)+' ')+ev.title,ev})),...(items[ds]||[])];const cell=el('button',{class:'day'+(d.getMonth()!==mo-1?' other':'')+(ds===td?' today':'')+(ds===calSel?' sel':''),onclick:()=>{calSel=ds;render();}},el('span',{class:'dn'},String(d.getDate())));
+    const evs=evMap[ds]||[];const list=[...evs.map(ev=>({kind:'ev',title:(ev.allDay?'':ev.start.slice(11)+' ')+ev.title,ev})),...(items[ds]||[])];let cell;cell=el('button',{class:'day'+(d.getMonth()!==mo-1?' other':'')+(ds===td?' today':'')+(ds===calSel?' sel':''),onclick:()=>{calSel=ds;render();}},el('span',{class:'dn'},String(d.getDate())));
+    cell.ondragover=e=>{if(dragEv){e.preventDefault();cell.classList.add('dropover');}};cell.ondragleave=()=>cell.classList.remove('dropover');cell.ondrop=e=>{e.preventDefault();cell.classList.remove('dropover');if(dragEv){const ev=dragEv;dragEv=null;moveEventTo(ev,ds);}};
     const dots=el('span',{class:'dots'});for(let k=0;k<Math.min(list.length,4);k++)dots.append(el('i'));cell.append(dots);
-    list.slice(0,3).forEach(it=>{const sp=el('span',{class:'it '+it.kind+(it.st?' c-'+it.st.color:'')+(it.ev?.allDay?' allday':'')},(it.kind==='todo'?'☐ ':'')+it.title);if(it.ev)sp.style.setProperty('--evc',gcal.color(it.ev));cell.append(sp);});
+    list.slice(0,3).forEach(it=>{const sp=el('span',{class:'it '+it.kind+(it.st?' c-'+it.st.color:'')+(it.ev?.allDay?' allday':'')},(it.kind==='todo'?'☐ ':'')+it.title);if(it.ev){sp.style.setProperty('--evc',gcal.color(it.ev));sp.draggable=true;sp.ondragstart=e=>{dragEv=it.ev;e.dataTransfer.setData('text/plain','ev');e.stopPropagation();};sp.ondragend=()=>{dragEv=null;};sp.onclick=e=>{e.stopPropagation();calSel=ds;editEvent(it.ev);};}cell.append(sp);});
     if(list.length>3)cell.append(el('span',{class:'it more'},`+${list.length-3}`));
     grid.append(cell);}
   wrap.append(grid);

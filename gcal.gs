@@ -13,7 +13,8 @@
  *   {key, action:"list", from:"2026-11-01", to:"2026-12-01", cals:"id1,id2"}
  *   {key, action:"search", q:"치과", cals:"…"}
  *   {key, action:"create", cal, title, date, time?, minutes?, desc?}
- *   {key, action:"delete", cal, id}
+ *   {key, action:"update", cal, id, origDate, title?, date?, time?, minutes?, allDay?, location?}
+ *   {key, action:"delete", cal, id, origDate}
  */
 var KEY = 'CHANGE-ME-to-a-long-random-string';
 
@@ -33,6 +34,7 @@ function handle_(p) {
       case 'list':      return out_(list_(p));
       case 'search':    return out_(search_(p));
       case 'create':    return out_(create_(p));
+      case 'update':    return out_(update_(p));
       case 'delete':    return out_(remove_(p));
       default:          return out_({ error: 'unknown action' });
     }
@@ -62,7 +64,7 @@ function fmt_(ev, cal) {
     id: ev.getId(), cal: cal.getId(), calName: cal.getName(), color: cal.getColor(),
     title: ev.getTitle(), allDay: allDay,
     start: iso_(ev.getStartTime()), end: iso_(ev.getEndTime()),
-    location: ev.getLocation() || '', desc: (ev.getDescription() || '').slice(0, 500)
+    location: ev.getLocation() || '', desc: (ev.getDescription() || '').slice(0, 500), recurring: ev.isRecurringEvent()
   };
 }
 function iso_(d) { return Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm"); }
@@ -100,8 +102,34 @@ function create_(p) {
   return { event: fmt_(ev, cal) };
 }
 
+// 반복 일정의 회차 id는 getEventById로 못 찾을 수 있어, 그날의 일정 중에서 id로 찾는다
+function find_(cal, id, origDate) {
+  if (origDate) {
+    var d = new Date(origDate + 'T00:00:00'), d2 = new Date(d.getTime() + 86400000);
+    var hits = cal.getEvents(d, d2).filter(function (e) { return e.getId() === id; });
+    if (hits.length) return hits[0];
+  }
+  return cal.getEventById(id);
+}
+
+function update_(p) {
+  var cal = CalendarApp.getCalendarById(p.cal); if (!cal) return { error: 'calendar not found' };
+  var ev = find_(cal, p.id, p.origDate); if (!ev) return { error: 'event not found' };
+  if (p.title !== undefined) ev.setTitle(String(p.title));
+  if (p.location !== undefined) ev.setLocation(String(p.location));
+  if (p.date) {
+    if (p.allDay || !p.time) ev.setAllDayDate(new Date(p.date + 'T00:00:00'));
+    else {
+      var start = new Date(p.date + 'T' + p.time + ':00');
+      var minutes = Number(p.minutes) || Math.round((ev.getEndTime() - ev.getStartTime()) / 60000) || 60;
+      ev.setTime(start, new Date(start.getTime() + minutes * 60000));
+    }
+  }
+  return { event: fmt_(ev, cal), recurring: ev.isRecurringEvent() };
+}
+
 function remove_(p) {
   var cal = CalendarApp.getCalendarById(p.cal); if (!cal) return { error: 'calendar not found' };
-  var ev = cal.getEventById(p.id); if (!ev) return { error: 'event not found' };
+  var ev = find_(cal, p.id, p.origDate); if (!ev) return { error: 'event not found' };
   ev.deleteEvent(); return { ok: true };
 }
