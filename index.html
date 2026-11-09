@@ -960,13 +960,21 @@ async function addTodoLine(targetPath,text,due){
   await saveNote(n,{},undefined,stripH1(body),true);render();
 }
 let todoNote='',todoDue='today',todoDate='',todoTarget='daily',todoRefocus=false;
+/* 날짜 없는 줄 → Inbox 노트로 옮기고 원래 줄은 지운다 */
+async function lineToNote(t){
+  const text=t.text.replace(/📅\s*\d{4}-\d{2}-\d{2}/,'').trim();if(!text)return;
+  if(!await confirmAsk('노트로 옮길까요?',`"${text}" — Inbox에 할 일 노트를 만들고 ${t.note.title}의 이 줄은 지웁니다.`,'옮기기'))return;
+  const ok=await addTodoNote(text,true);if(!ok)return;
+  const lines=t.note.body.split('\n');if(!parseTodo(lines[t.line]||'')){toast('원래 줄을 찾지 못해 노트만 만들었습니다');render();return;}
+  lines.splice(t.line,1);await saveNote(t.note,{},undefined,stripH1(lines.join('\n')),true);render();
+}
 /* 날짜 없는 할 일 → Inbox 노트 (label: todo). 체크하면 status: done */
-async function addTodoNote(text){
-  const title=text.trim();const path=`00_Inbox/${today()}-${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return;}
+async function addTodoNote(text,quiet){
+  const title=text.trim();const path=`00_Inbox/${today()}-${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return false;}
   const raw=buildFM({type:'inbox',label:'todo',created:today()})+`# ${title}\n\n`;const{fm,body}=parseFM(raw);const n={path,sha:null,raw,fm,body,title,folder:'00_Inbox'};
   try{const r=await api.put(path,raw,null,`web: 할 일 ${title}`);n.sha=r.content.sha;}
-  catch(e){if(isNetErr(e))queue.push({op:'put',path,content:raw,message:`web: 할 일 ${title}`,base:null});else{toast('생성 실패: '+e.message,4000);return;}}
-  notes.unshift(n);saveCache();fillFolders();render();
+  catch(e){if(isNetErr(e))queue.push({op:'put',path,content:raw,message:`web: 할 일 ${title}`,base:null});else{toast('생성 실패: '+e.message,4000);return false;}}
+  notes.unshift(n);saveCache();fillFolders();if(!quiet)render();return true;
 }
 /* 글 속의 날짜 표현을 읽는다: 오늘·내일·모레, 금요일, 다음주 수, 11/20, 20일, 2026-11-20 */
 function parseWhen(text){
@@ -1039,7 +1047,8 @@ function renderTodo(m){
     r.append(el('button',{class:'nt',title:t.note.path,onclick:()=>openNote(t.note)},t.kind==='note'?'노트 · '+t.note.folder.replace(/^\d+_/,''):t.note.folder==='01_Daily'?'데일리':t.note.title));
     const move=ds=>t.kind==='note'?saveNote(t.note,{due:ds},undefined,undefined,true).then(render):postponeTodo(t,ds);
     if(!done){const di=el('input',{type:'date',class:'ppdate','aria-label':'날짜 바꾸기',value:t.due||'',onclick:e=>e.stopPropagation(),onchange:()=>{if(di.value)move(di.value);}});
-      r.append(el('button',{class:'pp',title:'내일로',onclick:()=>move(addDays(td,1))},'→ 내일'),el('button',{class:'pp',title:'날짜 바꾸기',onclick:()=>{di.showPicker?.();di.focus();}},'📅'),di);}
+      r.append(el('button',{class:'pp',title:'내일로',onclick:()=>move(addDays(td,1))},'→ 내일'),el('button',{class:'pp',title:'날짜 바꾸기',onclick:()=>{di.showPicker?.();di.focus();}},'📅'),di);
+      if(t.kind!=='note'&&!t.due)r.append(el('button',{class:'pp',title:'Inbox에 할 일 노트로 만들고 이 줄은 지웁니다',onclick:()=>lineToNote(t)},'→ 노트로'));}
     return r;};
 
   // 날짜 상자: 기본은 오늘. 입력창에서 날짜를 고르거나 글에서 읽으면 그 날짜로 바뀐다
