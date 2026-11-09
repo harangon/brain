@@ -410,7 +410,7 @@ const DEFAULT_CONFIG={
 let cfg=JSON.parse(localStorage.getItem(LS)||'null')||{repo:'harangon/drbrain',branch:'main',token:''};
 cfg.gcal=cfg.gcal||{url:'',key:'',cals:[],names:{}};
 let config=structuredClone(DEFAULT_CONFIG), configSha=null;
-let notes=[];
+let notes=[],loadError='';
 let state={view:'table',folder:'',status:'',label:'',group:'status',sort:'updated:-1',q:'',saved:''};
 try{Object.assign(state,JSON.parse(localStorage.getItem('brain.state')||'{}'));}catch{}
 let current=null;
@@ -654,10 +654,11 @@ async function load(){
       if(need.length>16)$('#main').innerHTML=`<div class="status">불러오는 중… <b>${done}/${need.length}</b></div>`;
     }
     for(const it of queue.list){if(it.op==='put'&&!out.some(n=>n.path===it.path)&&cache[it.path])out.push(cache[it.path]);}
-    notes=out;saveCache();fillFolders();restoreControls();render();queue.badge();queue.flush();
+    notes=out;loadError='';saveCache();fillFolders();restoreControls();render();queue.badge();queue.flush();
   }catch(e){
     const cache=JSON.parse(localStorage.getItem('brain.cache')||'{}');
     if(isNetErr(e)&&Object.keys(cache).length){notes=Object.values(cache);fillFolders();restoreControls();render();queue.badge();toast('오프라인 — 마지막으로 받은 내용을 보여줍니다',3000);return;}
+    loadError=e.message;if(state.view==='calendar'||state.view==='docs'){render();toast('노트를 불러오지 못했습니다: '+e.message,5000);return;}
     $('#main').innerHTML=`<div class="status">불러오지 못했습니다.<br><b>${esc(e.message)}</b><br><br>저장소 이름, 브랜치, 토큰 권한(Contents 읽기·쓰기)을 확인하세요.</div>`;
   }
 }
@@ -710,10 +711,10 @@ function render(){
   renderViews();saveState();
   if(state.view!=='docs')undockPanel();else{const p=$('#panel');if(p.classList.contains('docked'))document.body.append(p);}
   const m=$('#main');m.innerHTML='';
-  if(!notes.length){m.append(el('div',{class:'status'},'노트가 없습니다. 위 입력창에 첫 메모를 적어 보세요.'));return;}
-  if(state.view==='todo')return renderTodo(m);
   if(state.view==='calendar')return renderCalendar(m);
   if(state.view==='docs')return renderDocs(m);
+  if(!notes.length){m.append(el('div',{class:'status'},loadError?`노트를 불러오지 못했습니다: ${loadError}`:'노트가 없습니다. 위 입력창에 첫 메모를 적어 보세요.'));return;}
+  if(state.view==='todo')return renderTodo(m);
   const v=visible();
   if(!v.length){m.append(el('div',{class:'status'},'조건에 맞는 노트가 없습니다.'));return;}
   ({table:renderTable,board:renderBoard,gallery:renderGallery})[state.view](v,m);
