@@ -992,6 +992,7 @@ function renderTodo(m){
   const wrap=el('div',{class:'tdwrap'});const main=el('div',{class:'tdmain'});
 
   // 빠른 추가
+  const box=el('section',{class:'tdtoday'});var boxReady=false;
   const targets=[['daily','데일리 노트'],...notes.filter(n=>['10_Projects','20_Areas'].includes(n.folder)&&n.fm.status!=='archived'&&n.fm.status!=='done').sort((a,b)=>a.title.localeCompare(b.title)).map(n=>[n.path,n.title])];
   const inp=el('input',{type:'text',placeholder:'할 일 적고 Enter (예: 금요일 보고서, 11/20 치과)',autocomplete:'off','aria-label':'할 일 추가'});
   const chips=el('div',{class:'chips',role:'group','aria-label':'날짜'});
@@ -1004,16 +1005,15 @@ function renderTodo(m){
     dateIn.style.display=todoDue==='date'?'':'none';chips.querySelector('[data-id=date]').textContent=todoDue==='date'&&todoDate?fmtDue(todoDate):'날짜…';
     const[sec,desc]=sectionOf(e.due);preview.innerHTML='';
     if(inp.value.trim()||todoDue!=='none'){preview.append(el('span',{},inp.value.trim()?`→ ${desc}${e.from==='text'?` (“${e.token}”에서 읽음)`:''} · ${sel.selectedOptions[0]?.textContent||''}`:`→ ${desc}`));
-      if(e.due&&gcal.on()){const ym=e.due.slice(0,7);const c=gcal.cache[ym];
-        if(!c||c.stale){gcal.month(ym).then(()=>{if(state.view==='todo')paint();}).catch(()=>{});preview.append(el('span',{class:'dayev'},' · 그날 일정 불러오는 중…'));}
-        else{const evs=gcal.byDay(c.events)[e.due]||[];preview.append(el('span',{class:'dayev'},evs.length?' · 그날 일정: '+evs.map(v=>(v.allDay?'':v.start.slice(11)+' ')+v.title).join(', '):' · 그날 일정 없음'));}}}};
+    }
+    if(boxReady)syncBox();};
   for(const[id,name]of dueOpts)chips.append(el('button',{type:'button',class:'chip','data-id':id,onclick:()=>{todoDue=id;if(id==='date'){dateIn.style.display='';dateIn.showPicker?.();}paint();if(id!=='date')inp.focus();}},name));
   chips.append(dateIn);
   const sel=el('select',{'aria-label':'저장할 노트',onchange:()=>{todoTarget=sel.value;paint();inp.focus();}});for(const[v,name]of targets)sel.append(el('option',{value:v},name));sel.value=targets.some(t=>t[0]===todoTarget)?todoTarget:'daily';
   const submit=async()=>{const e=effective();const text=e.rest;if(!text)return;inp.value='';paint();todoRefocus=true;
     await addTodoLine(sel.value==='daily'?`01_Daily/${td}.md`:sel.value,text,e.due);};
   inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();submit();}};inp.oninput=paint;
-  main.append(el('div',{class:'tdadd'},inp,chips,sel),preview);paint();
+  main.append(el('div',{class:'tdadd'},inp,chips,sel),preview,box);paint();
   if(todoRefocus){todoRefocus=false;setTimeout(()=>inp.focus(),0);}
 
   const row=(t,{showDue=true,late=false,done=false}={})=>{
@@ -1029,18 +1029,23 @@ function renderTodo(m){
       r.append(el('button',{class:'pp',title:'내일로',onclick:()=>postponeTodo(t,addDays(td,1))},'→ 내일'),el('button',{class:'pp',title:'날짜 바꾸기',onclick:()=>{di.showPicker?.();di.focus();}},'📅'),di);}
     return r;};
 
-  // 오늘 상자
-  const d=new Date(td+'T00:00');const box=el('section',{class:'tdtoday'});
-  let evs=null;if(gcal.on()){const ym=td.slice(0,7);const c=gcal.cache[ym];if(!c||c.stale||Date.now()-c.t>5*60*1000){gcal.month(ym).then(()=>{if(state.view==='todo')render();}).catch(()=>{});}evs=c?(gcal.byDay(c.events)[td]||[]):null;}
-  box.append(el('h2',{},'오늘',el('small',{},`${d.getMonth()+1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일`),el('span',{class:'cnt'},[gcal.on()?`일정 ${evs?evs.length:'…'}`:null,`할 일 ${todayL.length}`,overdue.length?`지연 ${overdue.length}`:null].filter(Boolean).join(' · '))));
-  const cols=el('div',{class:'tdcols'});
-  if(!gcal.on())cols.append(el('div',{},el('h3',{},'일정'),el('div',{class:'evnote'},'⚙ → 연결에서 Google 캘린더를 연결하면 오늘 일정이 여기 보입니다.')));
-  if(gcal.on()){const c1=el('div',{},el('h3',{},'일정 ',el('span',{},'Google 캘린더')));if(evs===null)c1.append(el('div',{class:'evnote'},'불러오는 중…'));else{for(const ev of evs)c1.append(evRow(ev,false));if(!evs.length)c1.append(el('div',{class:'evnote'},'없습니다.'));}
-    c1.append(el('button',{class:'btn sm',style:'margin-top:4px;align-self:flex-start',onclick:()=>newEvent(td)},'+ 오늘 일정'));cols.append(c1);}
-  const c2=el('div',{},el('h3',{},'할 일'));
-  for(const t of todayL.sort(byDue))c2.append(row(t,{showDue:false}));for(const t of overdue.sort(byDue))c2.append(row(t,{late:true}));
-  if(!todayL.length&&!overdue.length)c2.append(el('div',{class:'evnote'},'오늘 할 일이 없습니다.'));
-  cols.append(c2);box.append(cols);main.append(box);
+  // 날짜 상자: 기본은 오늘. 입력창에서 날짜를 고르거나 글에서 읽으면 그 날짜로 바뀐다
+  function paintBox(day){box.innerHTML='';const isToday=day===td;const d=new Date(day+'T00:00');
+    let evs=null;if(gcal.on()){const ym=day.slice(0,7);const c=gcal.cache[ym];if(!c||c.stale||Date.now()-c.t>5*60*1000){gcal.month(ym).then(()=>{if(state.view==='todo'&&box.isConnected)paintBox(day);}).catch(()=>{});}evs=c?(gcal.byDay(c.events)[day]||[]):null;}
+    const dayL=isToday?todayL:open.filter(t=>t.due===day);const lateL=isToday?overdue:[];
+    box.append(el('h2',{},isToday?'오늘':fmtDue(day),el('small',{},`${d.getMonth()+1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일`),
+      isToday?'':el('button',{class:'btn sm',style:'font-size:12px;padding:2px 8px',onclick:()=>{todoDue='today';todoDate='';inp.value=inp.value.replace(/\s+/g,' ');paint();}},'오늘로'),
+      el('span',{class:'cnt'},[gcal.on()?`일정 ${evs?evs.length:'…'}`:null,`할 일 ${dayL.length}`,lateL.length?`지연 ${lateL.length}`:null].filter(Boolean).join(' · '))));
+    const cols=el('div',{class:'tdcols'});
+    if(!gcal.on())cols.append(el('div',{},el('h3',{},'일정'),el('div',{class:'evnote'},'⚙ → 연결에서 Google 캘린더를 연결하면 일정이 여기 보입니다.')));
+    else{const c1=el('div',{},el('h3',{},'일정 ',el('span',{},'Google 캘린더')));if(evs===null)c1.append(el('div',{class:'evnote'},'불러오는 중…'));else{for(const ev of evs)c1.append(evRow(ev,false));if(!evs.length)c1.append(el('div',{class:'evnote'},'없습니다.'));}
+      c1.append(el('button',{class:'btn sm',style:'margin-top:4px;align-self:flex-start',onclick:()=>newEvent(day)},isToday?'+ 오늘 일정':'+ 이 날짜 일정'));cols.append(c1);}
+    const c2=el('div',{},el('h3',{},'할 일'));
+    for(const t of dayL.sort(byDue))c2.append(row(t,{showDue:false}));for(const t of lateL.sort(byDue))c2.append(row(t,{late:true}));
+    if(!dayL.length&&!lateL.length)c2.append(el('div',{class:'evnote'},isToday?'오늘 할 일이 없습니다.':'이 날짜 마감 할 일이 없습니다.'));
+    cols.append(c2);box.append(cols);}
+  var boxDay='';boxReady=true;function syncBox(){const e=effective();const day=e.due||td;if(day!==boxDay){boxDay=day;paintBox(day);}}
+  syncBox();
 
   const section=(id,name,list,opts={},collapsible=false)=>{
     if(!list.length)return;const sec=el('section',{class:'tdsec'});
