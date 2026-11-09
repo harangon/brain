@@ -144,6 +144,7 @@ td input.inl{width:118px}
 .tdadd .chip{padding:4px 10px;border-radius:14px;border:1px solid var(--line);font-size:12.5px;color:var(--fg2);background:var(--bg)}
 .tdadd .chip[aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
 .tdprev{font-size:12.5px;color:var(--fg2);margin:-8px 0 0 4px;min-height:16px}
+.tdprev .dayev{color:var(--accent)}
 .chipdate{padding:3px 6px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;background:var(--bg)}
 .ppdate{width:0;height:0;opacity:0;border:0;padding:0;margin:0;position:absolute}
 .trow{position:relative}
@@ -995,13 +996,17 @@ function renderTodo(m){
   const inp=el('input',{type:'text',placeholder:'할 일 적고 Enter (예: 금요일 보고서, 11/20 치과)',autocomplete:'off','aria-label':'할 일 추가'});
   const chips=el('div',{class:'chips',role:'group','aria-label':'날짜'});
   const dateIn=el('input',{type:'date',class:'chipdate','aria-label':'날짜 선택',value:todoDate,onchange:()=>{todoDate=dateIn.value;todoDue=todoDate?'date':'today';paint();inp.focus();}});
-  const dueOpts=[['today','오늘',()=>td],['tomorrow','내일',()=>addDays(td,1)],['date','날짜…',()=>todoDate||null],['none','나중에',()=>null]];
+  const dueOpts=[['today','오늘',()=>td],['date','날짜…',()=>todoDate||null],['none','나중에',()=>null]];
   const preview=el('div',{class:'tdprev','aria-live':'polite'});
   const sectionOf=due=>!due?['나중에','날짜 없음 칸에 들어갑니다']:due<td?['지연','오늘 상자(지연)']:due===td?['오늘','오늘 상자']:due<=wk?['이번 주',`이번 주 · ${fmtDue(due)}`]:['이후',`이후 · ${fmtDue(due)}`];
   const effective=()=>{const w=parseWhen(inp.value);if(w)return{due:w.due,from:'text',token:w.token,rest:w.rest};const o=dueOpts.find(o=>o[0]===todoDue);return{due:o?o[2]():td,from:'chip',rest:inp.value.trim()};};
   const paint=()=>{const e=effective();chips.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',String(e.from==='chip'&&c.dataset.id===todoDue)));
     dateIn.style.display=todoDue==='date'?'':'none';chips.querySelector('[data-id=date]').textContent=todoDue==='date'&&todoDate?fmtDue(todoDate):'날짜…';
-    const[sec,desc]=sectionOf(e.due);preview.textContent=inp.value.trim()?`→ ${desc}${e.from==='text'?` (“${e.token}”에서 읽음)`:''} · ${sel.selectedOptions[0]?.textContent||''}`:'';};
+    const[sec,desc]=sectionOf(e.due);preview.innerHTML='';
+    if(inp.value.trim()||todoDue!=='none'){preview.append(el('span',{},inp.value.trim()?`→ ${desc}${e.from==='text'?` (“${e.token}”에서 읽음)`:''} · ${sel.selectedOptions[0]?.textContent||''}`:`→ ${desc}`));
+      if(e.due&&gcal.on()){const ym=e.due.slice(0,7);const c=gcal.cache[ym];
+        if(!c||c.stale){gcal.month(ym).then(()=>{if(state.view==='todo')paint();}).catch(()=>{});preview.append(el('span',{class:'dayev'},' · 그날 일정 불러오는 중…'));}
+        else{const evs=gcal.byDay(c.events)[e.due]||[];preview.append(el('span',{class:'dayev'},evs.length?' · 그날 일정: '+evs.map(v=>(v.allDay?'':v.start.slice(11)+' ')+v.title).join(', '):' · 그날 일정 없음'));}}}};
   for(const[id,name]of dueOpts)chips.append(el('button',{type:'button',class:'chip','data-id':id,onclick:()=>{todoDue=id;if(id==='date'){dateIn.style.display='';dateIn.showPicker?.();}paint();if(id!=='date')inp.focus();}},name));
   chips.append(dateIn);
   const sel=el('select',{'aria-label':'저장할 노트',onchange:()=>{todoTarget=sel.value;paint();inp.focus();}});for(const[v,name]of targets)sel.append(el('option',{value:v},name));sel.value=targets.some(t=>t[0]===todoTarget)?todoTarget:'daily';
