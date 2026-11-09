@@ -1052,7 +1052,14 @@ function renderTodo(m){
     return r;};
 
   // 날짜 상자: 기본은 오늘. 입력창에서 날짜를 고르거나 글에서 읽으면 그 날짜로 바뀐다
-  function paintBox(day){box.innerHTML='';const isToday=day===td;const d=new Date(day+'T00:00');
+  function paintBox(day){box.innerHTML='';
+    if(day===null){ // 나중에: 날짜 없는 할 일 (Inbox 할 일 노트 + 날짜 없는 줄)
+      box.append(el('h2',{},'나중에',el('small',{},'날짜 없는 할 일'),el('button',{class:'btn sm',style:'font-size:12px;padding:2px 8px',onclick:()=>{todoDue='today';todoDate='';paint();}},'오늘로'),el('span',{class:'cnt'},`할 일 ${nodate.length}`)));
+      const c=el('div',{});for(const t of nodate.sort((a,b)=>(a.kind==='note'?0:1)-(b.kind==='note'?0:1)))c.append(row(t,{showDue:false}));
+      if(!nodate.length)c.append(el('div',{class:'evnote'},'날짜 없는 할 일이 없습니다.'));
+      c.append(el('div',{class:'evnote',style:'margin-top:8px'},'여기서 추가하면 Inbox에 할 일 노트로 저장됩니다. 체크 = 완료(status: done).'));
+      box.append(c);return;}
+    const isToday=day===td;const d=new Date(day+'T00:00');
     let evs=null;if(gcal.on()){const ym=day.slice(0,7);const c=gcal.cache[ym];if(!c||c.stale||Date.now()-c.t>5*60*1000){gcal.month(ym).then(()=>{if(state.view==='todo'&&box.isConnected)paintBox(day);}).catch(()=>{});}evs=c?(gcal.byDay(c.events)[day]||[]):null;}
     const dayL=isToday?todayL:open.filter(t=>t.due===day);const lateL=isToday?overdue:[];
     box.append(el('h2',{},isToday?'오늘':fmtDue(day),el('small',{},`${d.getMonth()+1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일`),
@@ -1066,11 +1073,12 @@ function renderTodo(m){
     for(const t of dayL.sort(byDue))c2.append(row(t,{showDue:false}));for(const t of lateL.sort(byDue))c2.append(row(t,{late:true}));
     if(!dayL.length&&!lateL.length)c2.append(el('div',{class:'evnote'},isToday?'오늘 할 일이 없습니다.':'이 날짜 마감 할 일이 없습니다.'));
     cols.append(c2);box.append(cols);}
-  var boxDay='';boxReady=true;function syncBox(){const e=effective();const day=e.due||td;if(day!==boxDay){boxDay=day;paintBox(day);}}
+  var boxDay='';boxReady=true;function syncBox(){const e=effective();const day=e.due||(e.from==='chip'&&todoDue==='none'?null:td);if(day!==boxDay){boxDay=day;paintBox(day);}
+    const ns=main.querySelector('[data-sec=nodate]');if(ns)ns.style.display=day===null?'none':'';}
   syncBox();
 
   const section=(id,name,list,opts={},collapsible=false)=>{
-    if(!list.length)return;const sec=el('section',{class:'tdsec'});
+    if(!list.length)return;const sec=el('section',{class:'tdsec','data-sec':id});
     if(collapsible){const isOpen=!!todoOpen[id];const hd=el('button',{class:'hd','aria-expanded':String(isOpen),onclick:()=>{todoOpen[id]=!todoOpen[id];localStorage.setItem('brain.todoOpen',JSON.stringify(todoOpen));render();}},el('span',{class:'tri'},isOpen?'▾':'▸'),name,el('small',{},String(list.length)));sec.append(hd);if(!isOpen){main.append(sec);return;}}
     else sec.append(el('h3',{},name,el('small',{},String(list.length))));
     for(const t of list.sort(byDue))sec.append(row(t,opts));main.append(sec);};
