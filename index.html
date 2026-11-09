@@ -75,7 +75,7 @@ td.t{white-space:normal;min-width:180px;max-width:420px}
 td.t button{text-align:left;font-weight:500;line-height:1.35}
 td.t button:hover{text-decoration:underline}
 td.t{display:table-cell}td.t>button{display:inline;vertical-align:middle}td.t .prog{margin-left:10px;vertical-align:middle;white-space:nowrap}
-.nd{margin:0 8px 0 0;vertical-align:middle;cursor:pointer}
+.nd{vertical-align:middle;cursor:pointer;accent-color:#3ba55d}
 .isdone>button,.ct.isdone{color:var(--fg3);text-decoration:line-through}.ct.isdone .nd{text-decoration:none}
 tr:hover td{background:var(--bg2)}
 .tag{display:inline-block;padding:1px 7px;border-radius:3px;font-size:12px;line-height:18px;background:var(--bg2);color:var(--fg2);white-space:nowrap}
@@ -869,11 +869,11 @@ function renderTable(v,m){
   const[sk,sd]=state.sort.split(':');
   bulkBar(m);
   const allSel=v.length&&v.every(n=>selected.has(n.path));
-  const thead=el('tr',{},el('th',{class:'ck'},el('input',{type:'checkbox','aria-label':'전체 선택',checked:allSel?'':null,onchange:e=>{for(const n of v)e.target.checked?selected.add(n.path):selected.delete(n.path);render();}})),
+  const thead=el('tr',{},el('th',{class:'ck'},el('input',{type:'checkbox','aria-label':'전체 선택',checked:allSel?'':null,onchange:e=>{for(const n of v){if(labelsOf(n).includes('todo'))continue;e.target.checked?selected.add(n.path):selected.delete(n.path);}render();}})),
     ...cols.map(([k,t])=>el('th',{class:k==='updated'?'hide-m':''},el('button',{onclick:()=>{const d=sk===k?-sd:(k==='updated'?-1:1);state.sort=`${k}:${d}`;render();}},t,sk===k?(+sd>0?' ↑':' ↓'):''))));
   const rows=v.map(n=>el('tr',{},
-    el('td',{class:'ck'},el('input',{type:'checkbox','aria-label':'선택',checked:selected.has(n.path)?'':null,onchange:e=>{e.target.checked?selected.add(n.path):selected.delete(n.path);render();}})),
-    el('td',{class:'t'+(n.fm.status==='done'&&labelsOf(n).includes('todo')?' isdone':'')},doneBox(n),el('button',{onclick:()=>openNote(n)},n.title),progEl(n)),
+    el('td',{class:'ck'},labelsOf(n).includes('todo')?doneBox(n):el('input',{type:'checkbox','aria-label':'선택',checked:selected.has(n.path)?'':null,onchange:e=>{e.target.checked?selected.add(n.path):selected.delete(n.path);render();}})),
+    el('td',{class:'t'+(n.fm.status==='done'&&labelsOf(n).includes('todo')?' isdone':'')},el('button',{onclick:()=>openNote(n)},n.title),progEl(n)),
     el('td',{},n.folder.replace(/^\d+_/,'')),
     el('td',{},inlineSelect(n,'status',config.statuses)),el('td',{},inlineLabels(n)),el('td',{},inlineDate(n)),
     ...(config.props||[]).map(pr=>el('td',{class:'hide-m'},inlineProp(n,pr))),
@@ -918,7 +918,7 @@ function renderBoard(v,m){
         ondragstart:e=>{e.dataTransfer.setData('text/plain',n.path);dragSrcKey=k;dropPos=null;c.classList.add('dragging');},ondragend:()=>c.classList.remove('dragging'),
         ondragover:e=>{e.preventDefault();e.stopPropagation();col.classList.add('over');const r=c.getBoundingClientRect();const top=e.clientY<r.top+r.height/2;col.querySelectorAll('.card').forEach(x=>x.classList.remove('over-top','over-bottom'));c.classList.add(top?'over-top':'over-bottom');
           const i=list.indexOf(n);dropPos={key:k,before:top?n:(list[i+1]||null)};}},
-        el('div',{class:'ct'+(n.fm.status==='done'&&labelsOf(n).includes('todo')?' isdone':'')},doneBox(n),n.title),el('div',{class:'cm'},n.folder.replace(/^\d+_/,''),g!=='label'?labelTag(n):'',g!=='status'?statusTag(n):'',dueEl(n),progEl(n)));
+        el('div',{class:'ct'+(n.fm.status==='done'&&labelsOf(n).includes('todo')?' isdone':'')},n.title),el('div',{class:'cm'},n.folder.replace(/^\d+_/,''),g!=='label'?labelTag(n):'',g!=='status'?statusTag(n):'',dueEl(n),progEl(n)));
       col.append(c);
     }
     board.append(col);
@@ -933,7 +933,7 @@ function renderGallery(v,m){
       .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g,'$1').replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\n{3,}/g,'\n\n').trim();
     const lo=labelOpt(labelsOf(n)[0]);
     gal.append(el('button',{class:'gcard'+(lo?' c-'+lo.color:''),onclick:()=>openNote(n)},
-      el('div',{class:'ct'+(n.fm.status==='done'&&labelsOf(n).includes('todo')?' isdone':'')},doneBox(n),n.title),el('div',{class:'cb'},body.slice(0,400)),
+      el('div',{class:'ct'+(n.fm.status==='done'&&labelsOf(n).includes('todo')?' isdone':'')},n.title),el('div',{class:'cb'},body.slice(0,400)),
       el('div',{class:'cm'},[n.folder.replace(/^\d+_/,''),(statusOpt(n.fm.status)||{}).name,n.fm.due].filter(Boolean).join(' · '))));
   }
   m.append(gal);
@@ -1222,7 +1222,13 @@ function showPreview(on){
       try{const b=await api.fileB64(path);if(b){const ext=path.split('.').pop().toLowerCase();const mime=ext==='svg'?'image/svg+xml':ext==='jpg'?'image/jpeg':'image/'+ext;im.src=imgCache[key]=`data:${mime};base64,${b}`;}else im.alt+=' (없음)';}catch{im.alt+=' (불러오기 실패)';}});
     $('#pPreview').querySelectorAll('a.wl').forEach(a=>a.onclick=e=>{e.preventDefault();const t=notes.find(x=>x.title===a.dataset.wl||x.path.endsWith('/'+a.dataset.wl+'.md'));if(t)openNote(t);else toast('노트를 찾을 수 없습니다');});}
 }
-async function saveNote(n,patch,newTitle,newBody,quiet){
+/* 같은 노트의 저장은 순서대로(겹치면 sha가 어긋나 409가 난다) */
+const saveLocks={};
+function saveNote(n,patch,newTitle,newBody,quiet,retry=true){
+  const prev=saveLocks[n.path]||Promise.resolve();const run=prev.then(()=>saveNoteNow(n,patch,newTitle,newBody,quiet,retry));
+  saveLocks[n.path]=run.catch(()=>{});return run;
+}
+async function saveNoteNow(n,patch,newTitle,newBody,quiet,retry){
   const fm={...n.fm,...patch};const onlyOrder=Object.keys(patch).length===1&&'order'in patch&&newTitle===undefined&&newBody===undefined;if(!onlyOrder)fm.updated=today();
   const title=newTitle??n.title;const body=newBody??stripH1(n.body);
   const hasH1=!!h1Of(n.body)||(newTitle!==undefined&&newTitle!==n.title);
@@ -1239,6 +1245,8 @@ async function saveNote(n,patch,newTitle,newBody,quiet){
       // 다른 기기가 먼저 바꿈. 최신본을 받아 와서 sha를 맞추고, 사용자의 내용은 유지한 채 다시 저장하게 한다.
       try{const f=await api.file(n.path);n.sha=f.sha;const p=parseFM(f.content);
         if(current===n){toast('다른 기기에서 먼저 수정된 노트입니다. 다시 저장하면 지금 내용으로 덮어씁니다',5000);}
+        else if(retry&&newBody===undefined&&newTitle===undefined){ // 속성만 바꾼 경우: 최신본 위에 같은 변경을 한 번 더 적용
+          Object.assign(n,{raw:f.content,fm:p.fm,body:p.body,title:titleOf(n.path,p.body)});return saveNoteNow(n,patch,newTitle,newBody,quiet,false);}
         else{Object.assign(n,{raw:f.content,fm:p.fm,body:p.body,title:titleOf(n.path,p.body)});saveCache();render();toast('다른 기기 변경을 받아왔습니다. 다시 시도하세요',4000);}
       }catch{toast('저장 실패: '+e.message,4000);}
       return;
