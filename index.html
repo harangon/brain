@@ -313,6 +313,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
 .pallist .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pallist .sec{font-size:11px;color:var(--fg3);padding:8px 10px 2px}
 .qbadge{cursor:pointer;font-size:11px;padding:2px 7px;border-radius:10px;background:var(--c-yellow);color:var(--c-yellow-fg)}
+.upd{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 10px 8px 14px;border-radius:20px;font-size:13px;display:flex;gap:10px;align-items:center;z-index:60;box-shadow:0 6px 20px rgba(0,0,0,.2)}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:var(--radius);font-size:13px;z-index:30;opacity:0;pointer-events:none;transition:opacity .15s}
 .toast.on{opacity:1}
 @media (max-width:640px){
@@ -792,8 +793,8 @@ function render(){
   const m=$('#main');m.innerHTML='';
   if(state.view==='calendar')return renderCalendar(m);
   if(state.view==='docs')return renderDocs(m);
+  if(state.view==='todo'){if(loadError)m.append(el('div',{class:'evnote',style:'margin-bottom:8px'},`노트를 불러오지 못했습니다: ${loadError}`));return renderTodo(m);}
   if(!notes.length){m.append(el('div',{class:'status'},loadError?`노트를 불러오지 못했습니다: ${loadError}`:'노트가 없습니다. 위 입력창에 첫 메모를 적어 보세요.'));return;}
-  if(state.view==='todo')return renderTodo(m);
   const v=visible();
   if(!v.length){m.append(el('div',{class:'status'},'조건에 맞는 노트가 없습니다.'));return;}
   ({table:renderTable,board:renderBoard,gallery:renderGallery})[state.view](v,m);
@@ -998,6 +999,7 @@ function renderTodo(m){
   let evs=null;if(gcal.on()){const ym=td.slice(0,7);const c=gcal.cache[ym];if(!c||c.stale||Date.now()-c.t>5*60*1000){gcal.month(ym).then(()=>{if(state.view==='todo')render();}).catch(()=>{});}evs=c?(gcal.byDay(c.events)[td]||[]):null;}
   box.append(el('h2',{},'오늘',el('small',{},`${d.getMonth()+1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일`),el('span',{class:'cnt'},[gcal.on()?`일정 ${evs?evs.length:'…'}`:null,`할 일 ${todayL.length}`,overdue.length?`지연 ${overdue.length}`:null].filter(Boolean).join(' · '))));
   const cols=el('div',{class:'tdcols'});
+  if(!gcal.on())cols.append(el('div',{},el('h3',{},'일정'),el('div',{class:'evnote'},'⚙ → 연결에서 Google 캘린더를 연결하면 오늘 일정이 여기 보입니다.')));
   if(gcal.on()){const c1=el('div',{},el('h3',{},'일정 ',el('span',{},'Google 캘린더')));if(evs===null)c1.append(el('div',{class:'evnote'},'불러오는 중…'));else{for(const ev of evs)c1.append(evRow(ev,false));if(!evs.length)c1.append(el('div',{class:'evnote'},'없습니다.'));}
     c1.append(el('button',{class:'btn sm',style:'margin-top:4px;align-self:flex-start',onclick:()=>newEvent(td)},'+ 오늘 일정'));cols.append(c1);}
   const c2=el('div',{},el('h3',{},'할 일'));
@@ -1464,7 +1466,13 @@ let qT;$('#q').oninput=()=>{clearTimeout(qT);qT=setTimeout(()=>{readControls();r
 $('#btnReload').onclick=()=>{localStorage.removeItem('brain.cache');load();};
 $('#qbadge').onclick=async()=>{if(!queue.list.length)return;if(navigator.onLine){await queue.flush();if(!queue.list.length)return;}if(await confirmAsk('대기 중인 변경을 버릴까요?',queue.list.map(x=>`${x.op==='del'?'삭제':'저장'} ${x.path}`).join('\n'),'버리기')){queue.list=[];queue.save();}};
 
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+/* 새 버전 감지: 서비스 워커가 새 파일을 받으면 띠를 띄우고, 누르면 새로고침 */
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').then(reg=>{
+  const show=()=>{if($('#upd'))return;const bar=el('div',{id:'upd',class:'upd'},'새 버전이 있습니다 ',el('button',{class:'btn sm primary',onclick:()=>{location.reload();}},'새로고침'));document.body.append(bar);};
+  if(reg.waiting&&navigator.serviceWorker.controller)show();
+  reg.addEventListener('updatefound',()=>{const w=reg.installing;w&&w.addEventListener('statechange',()=>{if(w.state==='installed'&&navigator.serviceWorker.controller)show();});});
+  setInterval(()=>reg.update().catch(()=>{}),30*60*1000);
+}).catch(()=>{});}
 try{const c=JSON.parse(localStorage.getItem('brain.config')||'null');if(c)config={...structuredClone(DEFAULT_CONFIG),...c};}catch{}
 applyConfig();
 if(!cfg.token){$('#main').innerHTML='<div class="status">먼저 오른쪽 위 ⚙ 에서 GitHub 토큰을 입력하세요.</div>';openSettings('conn');}else load();

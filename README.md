@@ -27,6 +27,6 @@
 - Obsidian 블록 리스트(`related:` + `  - "[[x]]"`)도 읽고, 쓸 때는 `[...]`로 정규화. 중첩 맵은 지원 안 함(저장 시 사라짐)
 
 ## 개발
-- 코드 전부 `index.html` 하나. `sw.js`는 network-first 셸 캐시
+- 코드 전부 `index.html` 하나. `sw.js`는 network-first 셸 캐시. 배포할 때 `sw.js`의 캐시 이름(`brain-shell-…`)을 바꾸면 열려 있는 앱에 "새 버전 — 새로고침" 띠가 뜬다
 - 테스트: `index.html`의 `<script>`를 뽑아 `api.*`를 메모리 파일로 바꾼 mock 페이지를 만들고 Playwright(Chromium)로 각 뷰·흐름을 돌린다. 순수 함수(parseFM/buildFM/titleOf/slug/mdToHtml)는 node 단위 테스트
 - 알려진 한계: 커밋 단위 파일 1개 · 이동·보관·첨부는 온라인 전용 · 미리보기는 기본 마크다운만
