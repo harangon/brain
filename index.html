@@ -75,6 +75,8 @@ td.t{white-space:normal;min-width:180px;max-width:420px}
 td.t button{text-align:left;font-weight:500;line-height:1.35}
 td.t button:hover{text-decoration:underline}
 td.t{display:table-cell}td.t>button{display:inline;vertical-align:middle}td.t .prog{margin-left:10px;vertical-align:middle;white-space:nowrap}
+.nd{margin:0 8px 0 0;vertical-align:middle;cursor:pointer}
+.isdone>button,.ct.isdone{color:var(--fg3);text-decoration:line-through}.ct.isdone .nd{text-decoration:none}
 tr:hover td{background:var(--bg2)}
 .tag{display:inline-block;padding:1px 7px;border-radius:3px;font-size:12px;line-height:18px;background:var(--bg2);color:var(--fg2);white-space:nowrap}
 .inl{appearance:none;-webkit-appearance:none;border:1px solid transparent;border-radius:3px;padding:1px 7px;font-size:12px;line-height:18px;cursor:pointer;background:var(--bg2);color:var(--fg2);max-width:130px}
@@ -507,6 +509,9 @@ const statusOpt=id=>optOf(config.statuses,id);const labelOpt=id=>optOf(config.la
 const labelsOf=n=>{const v=n.fm.label;return Array.isArray(v)?v.filter(Boolean):(v?[String(v)]:[]);};
 const packLabels=a=>{a=[...new Set(a.filter(Boolean))];return a.length===0?'':a.length===1?a[0]:a;};
 function progressOf(n){let t=0,d=0;for(const ln of n.body.split('\n')){const x=parseTodo(ln);if(x){t++;if(x.done)d++;}}return{t,d};}
+/* label: todo 노트 → 완료 체크박스 (status done) */
+function doneBox(n){if(!labelsOf(n).includes('todo'))return'';const done=n.fm.status==='done';
+  return el('input',{type:'checkbox',class:'nd',checked:done?'':null,'aria-label':done?'완료 해제':'완료',title:'완료 = status: done',onclick:e=>e.stopPropagation(),onchange:async e=>{await saveNote(n,{status:e.target.checked?'done':''},undefined,undefined,true);}});}
 function progEl(n){const{t,d}=progressOf(n);if(!t)return'';return el('span',{class:'prog'+(d===t?' full':''),title:`할 일 ${d}/${t}`},el('i',{},el('b',{style:`width:${Math.round(d/t*100)}%`})),`${d}/${t}`);}
 const RESERVED=new Set(['type','status','label','due','created','updated','related','permanent-candidate','order','cover','source']);
 
@@ -868,7 +873,7 @@ function renderTable(v,m){
     ...cols.map(([k,t])=>el('th',{class:k==='updated'?'hide-m':''},el('button',{onclick:()=>{const d=sk===k?-sd:(k==='updated'?-1:1);state.sort=`${k}:${d}`;render();}},t,sk===k?(+sd>0?' ↑':' ↓'):''))));
   const rows=v.map(n=>el('tr',{},
     el('td',{class:'ck'},el('input',{type:'checkbox','aria-label':'선택',checked:selected.has(n.path)?'':null,onchange:e=>{e.target.checked?selected.add(n.path):selected.delete(n.path);render();}})),
-    el('td',{class:'t'},el('button',{onclick:()=>openNote(n)},n.title),progEl(n)),
+    el('td',{class:'t'+(n.fm.status==='done'&&labelsOf(n).includes('todo')?' isdone':'')},doneBox(n),el('button',{onclick:()=>openNote(n)},n.title),progEl(n)),
     el('td',{},n.folder.replace(/^\d+_/,'')),
     el('td',{},inlineSelect(n,'status',config.statuses)),el('td',{},inlineLabels(n)),el('td',{},inlineDate(n)),
     ...(config.props||[]).map(pr=>el('td',{class:'hide-m'},inlineProp(n,pr))),
@@ -913,7 +918,7 @@ function renderBoard(v,m){
         ondragstart:e=>{e.dataTransfer.setData('text/plain',n.path);dragSrcKey=k;dropPos=null;c.classList.add('dragging');},ondragend:()=>c.classList.remove('dragging'),
         ondragover:e=>{e.preventDefault();e.stopPropagation();col.classList.add('over');const r=c.getBoundingClientRect();const top=e.clientY<r.top+r.height/2;col.querySelectorAll('.card').forEach(x=>x.classList.remove('over-top','over-bottom'));c.classList.add(top?'over-top':'over-bottom');
           const i=list.indexOf(n);dropPos={key:k,before:top?n:(list[i+1]||null)};}},
-        el('div',{class:'ct'},n.title),el('div',{class:'cm'},n.folder.replace(/^\d+_/,''),g!=='label'?labelTag(n):'',g!=='status'?statusTag(n):'',dueEl(n),progEl(n)));
+        el('div',{class:'ct'+(n.fm.status==='done'&&labelsOf(n).includes('todo')?' isdone':'')},doneBox(n),n.title),el('div',{class:'cm'},n.folder.replace(/^\d+_/,''),g!=='label'?labelTag(n):'',g!=='status'?statusTag(n):'',dueEl(n),progEl(n)));
       col.append(c);
     }
     board.append(col);
@@ -928,7 +933,7 @@ function renderGallery(v,m){
       .replace(/\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g,'$1').replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\n{3,}/g,'\n\n').trim();
     const lo=labelOpt(labelsOf(n)[0]);
     gal.append(el('button',{class:'gcard'+(lo?' c-'+lo.color:''),onclick:()=>openNote(n)},
-      el('div',{class:'ct'},n.title),el('div',{class:'cb'},body.slice(0,400)),
+      el('div',{class:'ct'+(n.fm.status==='done'&&labelsOf(n).includes('todo')?' isdone':'')},doneBox(n),n.title),el('div',{class:'cb'},body.slice(0,400)),
       el('div',{class:'cm'},[n.folder.replace(/^\d+_/,''),(statusOpt(n.fm.status)||{}).name,n.fm.due].filter(Boolean).join(' · '))));
   }
   m.append(gal);
