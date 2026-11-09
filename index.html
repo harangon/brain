@@ -40,6 +40,9 @@ header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px so
 .tabs{display:flex;gap:2px;background:var(--bg2);border-radius:var(--radius);padding:2px}
 .tabs button{padding:4px 10px;border-radius:4px;color:var(--fg2)}
 .tabs button[aria-selected=true]{background:var(--bg);color:var(--fg);box-shadow:0 0 0 1px var(--line)}
+.tabs.sub{background:transparent;padding:0;gap:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.tabs.sub button{border-radius:0;padding:4px 9px;font-size:12.5px}
+.tabs.sub button[aria-selected=true]{background:var(--bg2);box-shadow:none;font-weight:500}
 .sp{flex:1}
 .pill{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg);color:var(--fg2);font-size:13px}
 .pill select{border:0;background:transparent;padding:0;font-size:13px;color:var(--fg);max-width:120px}
@@ -125,6 +128,45 @@ td input.inl{width:118px}
 
 /* 할 일 */
 .todos{max-width:760px}
+.tdwrap{display:flex;gap:24px;align-items:flex-start}
+.tdmain{flex:1;min-width:0;max-width:820px;display:flex;flex-direction:column;gap:16px}
+.tdside{width:230px;flex:none;display:flex;flex-direction:column;gap:2px;position:sticky;top:8px}
+.tdside h4{margin:0 0 4px;font-size:12px;color:var(--fg2);font-weight:500}
+.tdside button{display:flex;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:6px;text-align:left;font-size:13px;color:var(--fg)}
+.tdside button:hover{background:var(--bg2)}
+.tdside button[aria-pressed=true]{background:var(--bg2);font-weight:600}
+.tdside button small{color:var(--fg3)}
+.tdadd{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tdadd input[type=text]{flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);font-size:14px}
+.tdadd .chips{gap:4px}
+.tdadd .chip{padding:4px 10px;border-radius:14px;border:1px solid var(--line);font-size:12.5px;color:var(--fg2);background:var(--bg)}
+.tdadd .chip[aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+.tdadd select{padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:13px;color:var(--fg2);max-width:180px}
+.tdtoday{border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));background:color-mix(in srgb,var(--accent) 6%,var(--bg));border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+.tdtoday h2{margin:0;font-size:16px;font-weight:700;display:flex;gap:10px;align-items:baseline}
+.tdtoday h2 small{font-weight:500;color:var(--fg2);font-size:13px}
+.tdtoday h2 .cnt{font-weight:400;color:var(--accent);font-size:13px;margin-left:auto}
+.tdcols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.tdcols h3{margin:0 0 4px;font-size:12px;color:var(--fg2);font-weight:500}
+.tdcols h3 span{color:var(--fg3)}
+.tdtoday .evrow,.tdtoday .trow{background:var(--bg);border-radius:8px;border-bottom:0;padding:7px 10px}
+.trow{display:flex;gap:10px;align-items:center;padding:7px 6px;border-bottom:1px solid var(--line);font-size:13.5px}
+.trow input{margin:0;flex:none}
+.trow .tx{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.35}
+.trow .tx .late{font-size:11.5px;color:var(--danger)}
+.trow .nt{font-size:11.5px;color:var(--fg2);background:var(--bg3);border-radius:10px;padding:2px 8px;white-space:nowrap;cursor:pointer}
+.trow .nt:hover{text-decoration:underline}
+.trow .d{font-size:12px;color:var(--fg2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.trow .pp{font-size:12px;color:var(--fg3);padding:2px 6px;white-space:nowrap}.trow .pp:hover{color:var(--fg)}
+.trow.done .tx{color:var(--fg3);text-decoration:line-through}
+.tdsec>h3{margin:0;font-size:13px;font-weight:600;color:var(--fg2);display:flex;gap:8px;align-items:center;padding:6px 0}
+.tdsec>h3 small{color:var(--fg3);font-weight:400}
+.tdsec>button.hd{display:flex;gap:8px;align-items:center;width:100%;text-align:left;padding:9px 0;border-top:1px solid var(--line);font-size:13px;color:var(--fg2);font-weight:600}
+.tdsec>button.hd small{color:var(--fg3);font-weight:400}
+.tdsec>button.hd .tri{color:var(--fg3);font-size:11px;width:10px}
+.tdchips{display:none}
+@media (max-width:640px){.tdwrap{flex-direction:column}.tdside{display:none}.tdchips{display:flex;gap:6px;overflow-x:auto;padding:4px 0 2px}.tdchips button{white-space:nowrap;padding:5px 11px;border-radius:14px;border:1px solid var(--line);font-size:12.5px;color:var(--fg2)}.tdchips button[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg)}.tdcols{grid-template-columns:1fr}.trow .pp{display:none}.trow .d{display:none}.trow .tx .when{font-size:11.5px;color:var(--fg2)}}
+@media (min-width:641px){.trow .tx .when{display:none}}
 .todos h3{font-size:13px;font-weight:500;color:var(--fg2);margin:18px 0 6px;display:flex;gap:8px;align-items:center}
 .todos h3:first-child{margin-top:4px}
 .todo{display:flex;align-items:flex-start;gap:10px;padding:7px 4px;border-bottom:1px solid var(--line)}
@@ -287,12 +329,15 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   <div class="bar">
     <span class="title">brain</span>
     <div class="tabs" role="tablist">
+      <button role="tab" data-view="docs">문서</button>
+      <button role="tab" data-view="notes" aria-selected="true">노트</button>
+      <button role="tab" data-view="todo">할 일</button>
+      <button role="tab" data-view="calendar">일정</button>
+    </div>
+    <div class="tabs sub" id="subtabs" role="tablist" aria-label="노트 보기 방식">
       <button role="tab" data-view="table" aria-selected="true">표</button>
       <button role="tab" data-view="board">보드</button>
       <button role="tab" data-view="gallery">갤러리</button>
-      <button role="tab" data-view="todo">할 일</button>
-      <button role="tab" data-view="calendar">달력</button>
-      <button role="tab" data-view="docs">문서</button>
     </div>
     <span class="pill" data-f>폴더 <select id="fFolder"><option value="">전체</option></select></span>
     <span class="pill" data-f>상태 <select id="fStatus"><option value="">전체</option></select></span>
@@ -733,9 +778,15 @@ function val(n,k){if(k==='title')return n.title;if(k==='folder')return n.folder;
 
 /* ===================== 렌더 ===================== */
 function render(){
-  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===state.view));
+  const isNotes=['table','board','gallery'].includes(state.view);
+  document.querySelectorAll('.tabs:not(.sub) button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view==='notes'?isNotes:b.dataset.view===state.view));
+  document.querySelectorAll('#subtabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===state.view));
+  $('#subtabs').style.display=isNotes?'':'none';
   $('#pillGroup').style.display=state.view==='board'?'':'none';
-  document.querySelectorAll('[data-f]').forEach(p=>p.style.display=(state.view==='todo'&&!p.contains($('#fFolder')))?'none':'');
+  document.querySelectorAll('[data-f]').forEach(p=>p.style.display=(isNotes||(state.view==='todo'&&p.contains($('#fFolder'))))?'':'none');
+  $('#q').style.display=(isNotes||state.view==='todo')?'':'none';
+  $('#views').style.display=isNotes?'':'none';
+  $('#quick').style.display=(isNotes||state.view==='docs')?'':'none';
   renderViews();saveState();
   if(state.view!=='docs')undockPanel();else{const p=$('#panel');if(p.classList.contains('docked'))document.body.append(p);}
   const m=$('#main');m.innerHTML='';
@@ -873,32 +924,106 @@ function renderGallery(v,m){
   }
   m.append(gal);
 }
+/* 할 일 줄 쓰기: 날짜만 바꾸거나 완료 표시 */
+function todoLine(indent,text,{done=false,due=null,doneDate=null}={}){
+  let t=text.replace(/\s*📅\s*\d{4}-\d{2}-\d{2}/,'').replace(/\s*✅\s*\d{4}-\d{2}-\d{2}/,'').trim();
+  return `${indent}- [${done?'x':' '}] ${t}${due?' 📅 '+due:''}${done?' ✅ '+(doneDate||today()):''}`;
+}
+async function rewriteTodo(n,lineIdx,fn){
+  const lines=n.body.split('\n');const m=(lines[lineIdx]||'').match(TODO_RE);if(!m){toast('항목을 찾지 못했습니다');return;}
+  lines[lineIdx]=fn(m[1],m[3]);await saveNote(n,{},undefined,stripH1(lines.join('\n')),true);render();
+}
+const postponeTodo=(t,ds)=>rewriteTodo(t.note,t.line,(ind,tx)=>todoLine(ind,tx,{due:ds}));
+const reopenTodo=(t)=>rewriteTodo(t.note,t.line,(ind,tx)=>todoLine(ind,tx,{due:t.due}));
+/* 할 일을 노트에 추가: 데일리면 ## 오늘 할 일, 그 외엔 ## 할 일 섹션(없으면 끝에 만든다) */
+async function addTodoLine(targetPath,text,due){
+  const line=`- [ ] ${text}${due?' 📅 '+due:''}`;const isDaily=targetPath.startsWith('01_Daily/');const head=isDaily?'## 오늘 할 일':'## 할 일';
+  let n=notes.find(x=>x.path===targetPath);
+  if(!n){ // 데일리 노트가 아직 없을 때만 새로 만든다
+    if(!isDaily){toast('노트를 찾지 못했습니다');return;}
+    let raw=await fromTemplate('Daily',today());if(!raw)raw=buildFM({type:'daily',created:today()})+`# ${today()}\n\n## 오늘 할 일\n\n## 메모\n`;
+    const i0=raw.indexOf(head);raw=i0>=0?raw.slice(0,i0+head.length)+'\n'+line+raw.slice(i0+head.length):raw.replace(/\s*$/,'')+`\n\n${head}\n${line}\n`;
+    const{fm,body}=parseFM(raw);n={path:targetPath,sha:null,raw,fm,body,title:today(),folder:'01_Daily'};
+    try{const r=await api.put(targetPath,raw,null,`web: 할 일 ${text}`);n.sha=r.content.sha;}catch(e){if(isNetErr(e))queue.push({op:'put',path:targetPath,content:raw,message:`web: 할 일 ${text}`,base:null});else{toast('생성 실패: '+e.message,4000);return;}}
+    notes.unshift(n);saveCache();fillFolders();render();return;}
+  let body=n.body;const i=body.indexOf(head);
+  if(i>=0){const j=body.indexOf('\n## ',i+1);const end=j<0?body.length:j;body=body.slice(0,end).replace(/\s*$/,'')+'\n'+line+'\n'+(j<0?'':'\n')+body.slice(end).replace(/^\n/,'');}
+  else body=body.replace(/\s*$/,'')+`\n\n${head}\n${line}\n`;
+  await saveNote(n,{},undefined,stripH1(body),true);render();
+}
+let todoNote='',todoDue='today',todoTarget='daily';
+const todoOpen=JSON.parse(localStorage.getItem('brain.todoOpen')||'{}');
+const WD=['일','월','화','수','목','금','토'];
+function fmtDue(ds){const d=new Date(ds+'T00:00');return `${WD[d.getDay()]} ${ds.slice(5).replace('-','-')}`;}
+function daysLate(ds){return Math.round((new Date(today()+'T00:00')-new Date(ds+'T00:00'))/86400000);}
+function nextMonday(){const d=new Date(today()+'T00:00');d.setDate(d.getDate()+((8-d.getDay())%7||7));return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function renderTodo(m){
-  readControls();const q=state.q.trim().toLowerCase(),f=state.folder;
-  const items=[];
-  for(const n of notes){if(f&&n.folder!==f)continue;const lines=n.body.split('\n');lines.forEach((ln,i)=>{const t=parseTodo(ln);if(t&&!t.done&&(!q||t.text.toLowerCase().includes(q)))items.push({...t,note:n,line:i});});}
-  const td=today(),wk=addDays(td,7);
-  const groups=[['지연',t=>t.due&&t.due<td],['오늘',t=>t.due===td],['7일 내',t=>t.due>td&&t.due<=wk],['이후',t=>t.due>wk],['날짜 없음',t=>!t.due]];
-  const wrap=el('div',{class:'todos'});let total=0;
-  if(gcal.on()){const ym=td.slice(0,7);const c=gcal.cache[ym];
-    if(!c||c.stale||Date.now()-c.t>5*60*1000){gcal.month(ym).then(()=>{if(state.view==='todo')render();}).catch(()=>{});}
-    const evs=c?(gcal.byDay(c.events)[td]||[]):[];
-    const box=el('div',{class:'todayev'},el('h4',{},`오늘 일정 · ${evs.length}건${c&&Date.now()-c.t>5*60*1000?' (갱신 중)':''}`));
-    for(const ev of evs)box.append(evRow(ev,false));if(!evs.length)box.append(el('div',{class:'evnote'},c?'없습니다.':'불러오는 중…'));
-    box.append(el('div',{class:'add',style:'margin-top:6px'},el('button',{class:'btn sm',onclick:()=>newEvent(td)},'+ 오늘 일정')));wrap.append(box);}
-  for(const[name,f]of groups){
-    const list=items.filter(f).sort((a,b)=>(a.due||'9')<(b.due||'9')?-1:1);if(!list.length)continue;total+=list.length;
-    wrap.append(el('h3',{},name,el('span',{class:'tag'},String(list.length))));
-    for(const t of list){
-      const row=el('div',{class:'todo'},
-        el('input',{type:'checkbox',onchange:async e=>{row.classList.add('done');await completeTodo(t.note,t.line);}}),
-        el('div',{class:'tx'},t.text.replace(/📅\s*\d{4}-\d{2}-\d{2}/,'').trim(),el('span',{class:'src'},el('button',{onclick:()=>openNote(t.note)},t.note.title))),
-        t.due?el('span',{class:'d'+(name==='지연'?' late':'')},t.due):'');
-      wrap.append(row);
-    }
-  }
-  if(!total)wrap.append(el('div',{class:'status'},'미완료 할 일이 없습니다. 형식: - [ ] 내용 📅 YYYY-MM-DD'));
-  m.append(wrap);
+  readControls();const q=state.q.trim().toLowerCase(),f=state.folder;const td=today(),wk=addDays(td,7);
+  const all=[];const perNote=new Map();
+  for(const n of notes){if(f&&n.folder!==f)continue;n.body.split('\n').forEach((ln,i)=>{const t=parseTodo(ln);if(!t)return;const it={...t,note:n,line:i};all.push(it);
+      const k=n.folder==='01_Daily'?'__daily':n.path;const e=perNote.get(k)||{key:k,title:n.folder==='01_Daily'?'데일리 노트':n.title,open:0,total:0,note:n};e.total++;if(!t.done)e.open++;perNote.set(k,e);});}
+  const items=all.filter(t=>(!todoNote||(todoNote==='__daily'?t.note.folder==='01_Daily':t.note.path===todoNote))&&(!q||t.text.toLowerCase().includes(q)));
+  const open=items.filter(t=>!t.done);
+  const overdue=open.filter(t=>t.due&&t.due<td),todayL=open.filter(t=>t.due===td),week=open.filter(t=>t.due>td&&t.due<=wk),later=open.filter(t=>t.due>wk),nodate=open.filter(t=>!t.due);
+  const doneToday=items.filter(t=>t.done&&new RegExp('✅\\s*'+td).test(t.note.body.split('\n')[t.line]||''));
+  const byDue=(a,b)=>(a.due||'9')<(b.due||'9')?-1:1;
+  const wrap=el('div',{class:'tdwrap'});const main=el('div',{class:'tdmain'});
+
+  // 빠른 추가
+  const targets=[['daily','데일리 노트'],...notes.filter(n=>['10_Projects','20_Areas'].includes(n.folder)&&n.fm.status!=='archived'&&n.fm.status!=='done').sort((a,b)=>a.title.localeCompare(b.title)).map(n=>[n.path,n.title])];
+  const inp=el('input',{type:'text',placeholder:'할 일 적고 Enter',autocomplete:'off','aria-label':'할 일 추가'});
+  const chips=el('div',{class:'chips',role:'group','aria-label':'날짜'});
+  const dueOpts=[['today','오늘',td],['tomorrow','내일',addDays(td,1)],['nextweek','다음 주',nextMonday()],['none','날짜 없음',null]];
+  for(const[id,name]of dueOpts)chips.append(el('button',{type:'button',class:'chip','aria-pressed':String(todoDue===id),onclick:()=>{todoDue=id;chips.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',String(c.textContent===name)));inp.focus();}},name));
+  const sel=el('select',{'aria-label':'저장할 노트',onchange:()=>{todoTarget=sel.value;}});for(const[v,name]of targets)sel.append(el('option',{value:v},name));sel.value=targets.some(t=>t[0]===todoTarget)?todoTarget:'daily';
+  const submit=async()=>{const text=inp.value.trim();if(!text)return;const due=dueOpts.find(o=>o[0]===todoDue)[2];inp.value='';inp.disabled=true;
+    await addTodoLine(sel.value==='daily'?`01_Daily/${td}.md`:sel.value,text,due);};
+  inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();submit();}};
+  main.append(el('div',{class:'tdadd'},inp,chips,sel));
+
+  const row=(t,{showDue=true,late=false,done=false}={})=>{
+    const r=el('div',{class:'trow'+(done?' done':'')});
+    const cb=el('input',{type:'checkbox',checked:done?'':null,'aria-label':'완료',onchange:async()=>{r.classList.toggle('done');if(done)await reopenTodo(t);else await completeTodo(t.note,t.line);}});
+    const tx=el('div',{class:'tx'},el('span',{},t.text.replace(/📅\s*\d{4}-\d{2}-\d{2}/,'').trim()));
+    if(late&&t.due)tx.append(el('span',{class:'late'},`${t.due.slice(5)} · ${daysLate(t.due)}일 지남`));
+    else if(showDue&&t.due)tx.append(el('span',{class:'when'},fmtDue(t.due)));
+    r.append(cb,tx);
+    if(showDue&&t.due&&!late)r.append(el('span',{class:'d'},fmtDue(t.due)));
+    r.append(el('button',{class:'nt',title:t.note.path,onclick:()=>openNote(t.note)},t.note.folder==='01_Daily'?'데일리':t.note.title));
+    if(!done)r.append(el('button',{class:'pp',title:'내일로',onclick:()=>postponeTodo(t,addDays(td,1))},'→ 내일'),el('button',{class:'pp',title:'다음 주 월요일로',onclick:()=>postponeTodo(t,nextMonday())},'→ 다음 주'));
+    return r;};
+
+  // 오늘 상자
+  const d=new Date(td+'T00:00');const box=el('section',{class:'tdtoday'});
+  let evs=null;if(gcal.on()){const ym=td.slice(0,7);const c=gcal.cache[ym];if(!c||c.stale||Date.now()-c.t>5*60*1000){gcal.month(ym).then(()=>{if(state.view==='todo')render();}).catch(()=>{});}evs=c?(gcal.byDay(c.events)[td]||[]):null;}
+  box.append(el('h2',{},'오늘',el('small',{},`${d.getMonth()+1}월 ${d.getDate()}일 ${WD[d.getDay()]}요일`),el('span',{class:'cnt'},[gcal.on()?`일정 ${evs?evs.length:'…'}`:null,`할 일 ${todayL.length}`,overdue.length?`지연 ${overdue.length}`:null].filter(Boolean).join(' · '))));
+  const cols=el('div',{class:'tdcols'});
+  if(gcal.on()){const c1=el('div',{},el('h3',{},'일정 ',el('span',{},'Google 캘린더')));if(evs===null)c1.append(el('div',{class:'evnote'},'불러오는 중…'));else{for(const ev of evs)c1.append(evRow(ev,false));if(!evs.length)c1.append(el('div',{class:'evnote'},'없습니다.'));}
+    c1.append(el('button',{class:'btn sm',style:'margin-top:4px;align-self:flex-start',onclick:()=>newEvent(td)},'+ 오늘 일정'));cols.append(c1);}
+  const c2=el('div',{},el('h3',{},'할 일'));
+  for(const t of todayL.sort(byDue))c2.append(row(t,{showDue:false}));for(const t of overdue.sort(byDue))c2.append(row(t,{late:true}));
+  if(!todayL.length&&!overdue.length)c2.append(el('div',{class:'evnote'},'오늘 할 일이 없습니다.'));
+  cols.append(c2);box.append(cols);main.append(box);
+
+  const section=(id,name,list,opts={},collapsible=false)=>{
+    if(!list.length)return;const sec=el('section',{class:'tdsec'});
+    if(collapsible){const isOpen=!!todoOpen[id];const hd=el('button',{class:'hd','aria-expanded':String(isOpen),onclick:()=>{todoOpen[id]=!todoOpen[id];localStorage.setItem('brain.todoOpen',JSON.stringify(todoOpen));render();}},el('span',{class:'tri'},isOpen?'▾':'▸'),name,el('small',{},String(list.length)));sec.append(hd);if(!isOpen){main.append(sec);return;}}
+    else sec.append(el('h3',{},name,el('small',{},String(list.length))));
+    for(const t of list.sort(byDue))sec.append(row(t,opts));main.append(sec);};
+  section('week','이번 주',week);
+  section('later','이후',later,{},true);
+  section('nodate','날짜 없음',nodate,{showDue:false},true);
+  section('done','오늘 완료',doneToday,{showDue:false,done:true},true);
+  if(!open.length&&!doneToday.length)main.append(el('div',{class:'status'},'할 일이 없습니다. 위 입력창에 적거나, 노트 본문에 - [ ] 내용 📅 YYYY-MM-DD 로 쓰세요.'));
+
+  // 노트별 (PC: 오른쪽, 폰: 칩)
+  const list=[...perNote.values()].sort((a,b)=>b.open-a.open||a.title.localeCompare(b.title));const totalOpen=all.filter(t=>!t.done).length;
+  const side=el('aside',{class:'tdside'},el('h4',{},'노트별'));const chipsM=el('div',{class:'tdchips'});
+  const mk=(key,title,open,total,holder,cls)=>holder.append(el('button',{class:cls,'aria-pressed':String(todoNote===key),onclick:()=>{todoNote=todoNote===key?'':key;render();}},el('span',{},title),el('small',{},open===null?String(total):`${open}/${total}`)));
+  mk('','전체',null,totalOpen,side,'');for(const e of list)mk(e.key,e.title,e.open,e.total,side,'');
+  mk('','전체',null,totalOpen,chipsM,'');for(const e of list)mk(e.key,e.title,e.open,e.total,chipsM,'');
+  side.append(el('p',{class:'evnote',style:'margin:12px 0 0;line-height:1.5'},'체크 → ✅ 날짜로 커밋. 미루기는 📅 날짜만 바꿈. 데일리 노트 항목은 /daily가 아침에 다시 모아 줌.'));
+  main.prepend(chipsM);wrap.append(main,side);m.append(wrap);
 }
 /* ===================== 달력 ===================== */
 let calMonth=today().slice(0,7),calSel=today();
@@ -1165,17 +1290,7 @@ async function newWithDue(ds){
 }
 async function addTodoOn(ds){
   const text=(await ask(`${ds} 할 일`,{placeholder:'할 일 내용'})||'').trim();if(!text)return;
-  const dp=`01_Daily/${today()}.md`;let n=notes.find(x=>x.path===dp);
-  const line=`- [ ] ${text} 📅 ${ds}`;
-  if(!n){let raw=await fromTemplate('Daily',today());if(!raw)raw=buildFM({type:'daily',created:today()})+`# ${today()}\n\n## 오늘 할 일\n\n## 메모\n`;
-    const i0=raw.indexOf('## 오늘 할 일');raw=i0>=0?raw.slice(0,i0+'## 오늘 할 일'.length)+'\n'+line+raw.slice(i0+'## 오늘 할 일'.length):raw.replace(/\s*$/,'')+`\n\n## 오늘 할 일\n${line}\n`;
-    const{fm,body}=parseFM(raw);n={path:dp,sha:null,raw,fm,body,title:today(),folder:'01_Daily'};
-    try{const r=await api.put(dp,raw,null,`web: 할 일 ${text}`);n.sha=r.content.sha;}catch(e){if(isNetErr(e))queue.push({op:'put',path:dp,content:raw,message:`web: 할 일 ${text}`});else{toast('생성 실패: '+e.message,4000);return;}}
-    notes.unshift(n);saveCache();render();return;}
-  let body=n.body;const i=body.indexOf('## 오늘 할 일');
-  if(i>=0){const j=body.indexOf('\n## ',i+1);const end=j<0?body.length:j;body=body.slice(0,end).replace(/\s*$/,'')+'\n'+line+'\n'+(j<0?'':'\n')+body.slice(end).replace(/^\n/,'');}
-  else body=body.replace(/\s*$/,'')+`\n\n## 오늘 할 일\n${line}\n`;
-  await saveNote(n,{},undefined,stripH1(body),true);render();
+  await addTodoLine(`01_Daily/${today()}.md`,text,ds);
 }
 
 /* ===================== 이미지 첨부 ===================== */
@@ -1309,7 +1424,7 @@ let palItems=[],palIdx=0;
 function palCommands(){
   const c=[{k:'새 메모',n:'Inbox에 빠른 메모',run:()=>{$('#quickText').focus();}}];
   for(const[f,t]of Object.entries(TEMPLATE_OF))c.push({k:'새 노트',n:`${f.replace(/^\d+_/,'')} (${t} 템플릿)`,run:()=>newFromTemplate(f)});
-  for(const[v,name]of[['table','표'],['board','보드'],['gallery','갤러리'],['todo','할 일'],['calendar','달력'],['docs','문서']])c.push({k:'뷰',n:name,run:()=>switchView(v)});
+  for(const[v,name]of[['docs','문서'],['table','노트 · 표'],['board','노트 · 보드'],['gallery','노트 · 갤러리'],['todo','할 일'],['calendar','일정']])c.push({k:'뷰',n:name,run:()=>switchView(v)});
   for(const sv of config.views)c.push({k:'저장된 뷰',n:sv.name,run:()=>applyView(sv)});
   if(gcal.on()){c.push({k:'일정',n:'새 일정',run:()=>newEvent(today())},{k:'일정',n:'일정 검색…',run:async()=>{const q=await ask('일정 검색',{placeholder:'제목·장소 단어'});if(q){await switchView('calendar');searchEvents(q);}}});}
   if(current){const n=current;c.push({k:'이 노트',n:'복제',run:()=>duplicateNote(n)},{k:'이 노트',n:'다른 폴더로 이동',run:()=>moveNotePrompt(n)},{k:'이 노트',n:'보관',run:()=>archiveNote(n)},{k:'이 노트',n:'넓게/좁게 보기',run:()=>$('#panel').classList.toggle('wide')});}
@@ -1342,7 +1457,8 @@ $('#btnPalette').onclick=openPalette;
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#palette').classList.contains('on')?closePalette():openPalette();}});
 
 /* ===================== 컨트롤 ===================== */
-document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchView(b.dataset.view));
+let lastNotesView=['table','board','gallery'].includes(state.view)?state.view:'table';
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{const v=b.dataset.view;if(['table','board','gallery'].includes(v))lastNotesView=v;switchView(v==='notes'?lastNotesView:v);});
 ['#fFolder','#fStatus','#fLabel','#fGroup'].forEach(s=>$(s).onchange=()=>{readControls();state.saved='';render();});
 let qT;$('#q').oninput=()=>{clearTimeout(qT);qT=setTimeout(()=>{readControls();render();},120);};
 $('#btnReload').onclick=()=>{localStorage.removeItem('brain.cache');load();};
