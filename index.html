@@ -960,6 +960,14 @@ async function addTodoLine(targetPath,text,due){
   await saveNote(n,{},undefined,stripH1(body),true);render();
 }
 let todoNote='',todoDue='today',todoDate='',todoTarget='daily',todoRefocus=false;
+/* 날짜 없는 할 일 → Inbox 노트 (label: todo). 체크하면 status: done */
+async function addTodoNote(text){
+  const title=text.trim();const path=`00_Inbox/${today()}-${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return;}
+  const raw=buildFM({type:'inbox',label:'todo',created:today()})+`# ${title}\n\n`;const{fm,body}=parseFM(raw);const n={path,sha:null,raw,fm,body,title,folder:'00_Inbox'};
+  try{const r=await api.put(path,raw,null,`web: 할 일 ${title}`);n.sha=r.content.sha;}
+  catch(e){if(isNetErr(e))queue.push({op:'put',path,content:raw,message:`web: 할 일 ${title}`,base:null});else{toast('생성 실패: '+e.message,4000);return;}}
+  notes.unshift(n);saveCache();fillFolders();render();
+}
 /* 글 속의 날짜 표현을 읽는다: 오늘·내일·모레, 금요일, 다음주 수, 11/20, 20일, 2026-11-20 */
 function parseWhen(text){
   const td=today();const base=new Date(td+'T00:00');const f=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -983,11 +991,15 @@ function renderTodo(m){
   readControls();const q=state.q.trim().toLowerCase(),f=state.folder;const td=today(),wk=addDays(td,7);
   const all=[];const perNote=new Map();
   for(const n of notes){if(f&&n.folder!==f)continue;n.body.split('\n').forEach((ln,i)=>{const t=parseTodo(ln);if(!t)return;const it={...t,note:n,line:i};all.push(it);
-      const k=n.folder==='01_Daily'?'__daily':n.path;const e=perNote.get(k)||{key:k,title:n.folder==='01_Daily'?'데일리 노트':n.title,open:0,total:0,note:n};e.total++;if(!t.done)e.open++;perNote.set(k,e);});}
-  const items=all.filter(t=>(!todoNote||(todoNote==='__daily'?t.note.folder==='01_Daily':t.note.path===todoNote))&&(!q||t.text.toLowerCase().includes(q)));
+      const k=n.folder==='01_Daily'?'__daily':n.path;const e=perNote.get(k)||{key:k,title:n.folder==='01_Daily'?'데일리 노트':n.title,open:0,total:0,note:n};e.total++;if(!t.done)e.open++;perNote.set(k,e);});
+    // 노트 자체가 할 일인 경우: label todo 이거나 due 가 있는 노트. 체크 = status done
+    if(n.folder!=='01_Daily'&&n.folder!=='90_Archive'&&(labelsOf(n).includes('todo')||n.fm.due)&&n.fm.status!=='archived'){
+      const done=n.fm.status==='done';all.push({kind:'note',text:n.title,due:n.fm.due||null,done,note:n,line:-1});
+      const e=perNote.get('__notes')||{key:'__notes',title:'할 일 노트',open:0,total:0};e.total++;if(!done)e.open++;perNote.set('__notes',e);}}
+  const items=all.filter(t=>(!todoNote||(todoNote==='__daily'?t.note.folder==='01_Daily'&&t.kind!=='note':todoNote==='__notes'?t.kind==='note':t.note.path===todoNote&&t.kind!=='note'))&&(!q||t.text.toLowerCase().includes(q)));
   const open=items.filter(t=>!t.done);
   const overdue=open.filter(t=>t.due&&t.due<td),todayL=open.filter(t=>t.due===td),week=open.filter(t=>t.due>td&&t.due<=wk),later=open.filter(t=>t.due>wk),nodate=open.filter(t=>!t.due);
-  const doneToday=items.filter(t=>t.done&&new RegExp('✅\\s*'+td).test(t.note.body.split('\n')[t.line]||''));
+  const doneToday=items.filter(t=>t.done&&(t.kind==='note'?t.note.fm.updated===td:new RegExp('✅\\s*'+td).test(t.note.body.split('\n')[t.line]||'')));
   const byDue=(a,b)=>(a.due||'9')<(b.due||'9')?-1:1;
   const wrap=el('div',{class:'tdwrap'});const main=el('div',{class:'tdmain'});
 
@@ -999,7 +1011,7 @@ function renderTodo(m){
   const dateIn=el('input',{type:'date',class:'chipdate','aria-label':'날짜 선택',value:todoDate,onchange:()=>{todoDate=dateIn.value;todoDue=todoDate?'date':'today';paint();inp.focus();}});
   const dueOpts=[['today','오늘',()=>td],['date','날짜…',()=>todoDate||null],['none','나중에',()=>null]];
   const preview=el('div',{class:'tdprev','aria-live':'polite'});
-  const sectionOf=due=>!due?['나중에','날짜 없음 칸에 들어갑니다']:due<td?['지연','오늘 상자(지연)']:due===td?['오늘','오늘 상자']:due<=wk?['이번 주',`이번 주 · ${fmtDue(due)}`]:['이후',`이후 · ${fmtDue(due)}`];
+  const sectionOf=due=>!due?['나중에',sel.value==='daily'?'나중에 — Inbox에 할 일 노트로 만듭니다 (체크 = 완료 상태)':'나중에 — 날짜 없는 줄로 추가']:due<td?['지연','오늘 상자(지연)']:due===td?['오늘','오늘 상자']:due<=wk?['이번 주',`이번 주 · ${fmtDue(due)}`]:['이후',`이후 · ${fmtDue(due)}`];
   const effective=()=>{const w=parseWhen(inp.value);if(w)return{due:w.due,from:'text',token:w.token,rest:w.rest};const o=dueOpts.find(o=>o[0]===todoDue);return{due:o?o[2]():td,from:'chip',rest:inp.value.trim()};};
   const paint=()=>{const e=effective();chips.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',String(e.from==='chip'&&c.dataset.id===todoDue)));
     dateIn.style.display=todoDue==='date'?'':'none';chips.querySelector('[data-id=date]').textContent=todoDue==='date'&&todoDate?fmtDue(todoDate):'날짜…';
@@ -1011,22 +1023,23 @@ function renderTodo(m){
   chips.append(dateIn);
   const sel=el('select',{'aria-label':'저장할 노트',onchange:()=>{todoTarget=sel.value;paint();inp.focus();}});for(const[v,name]of targets)sel.append(el('option',{value:v},name));sel.value=targets.some(t=>t[0]===todoTarget)?todoTarget:'daily';
   const submit=async()=>{const e=effective();const text=e.rest;if(!text)return;inp.value='';paint();todoRefocus=true;
-    await addTodoLine(sel.value==='daily'?`01_Daily/${td}.md`:sel.value,text,e.due);};
+    if(!e.due&&sel.value==='daily')await addTodoNote(text);else await addTodoLine(sel.value==='daily'?`01_Daily/${td}.md`:sel.value,text,e.due);};
   inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();submit();}};inp.oninput=paint;
   main.append(el('div',{class:'tdadd'},inp,chips,sel),preview,box);paint();
   if(todoRefocus){todoRefocus=false;setTimeout(()=>inp.focus(),0);}
 
   const row=(t,{showDue=true,late=false,done=false}={})=>{
     const r=el('div',{class:'trow'+(done?' done':'')});
-    const cb=el('input',{type:'checkbox',checked:done?'':null,'aria-label':'완료',onchange:async()=>{r.classList.toggle('done');if(done)await reopenTodo(t);else await completeTodo(t.note,t.line);}});
+    const cb=el('input',{type:'checkbox',checked:done?'':null,'aria-label':'완료',onchange:async()=>{r.classList.toggle('done');if(t.kind==='note'){await saveNote(t.note,{status:done?'':'done'},undefined,undefined,true);render();}else if(done)await reopenTodo(t);else await completeTodo(t.note,t.line);}});
     const tx=el('div',{class:'tx'},el('span',{},t.text.replace(/📅\s*\d{4}-\d{2}-\d{2}/,'').trim()));
     if(late&&t.due)tx.append(el('span',{class:'late'},`${t.due.slice(5)} · ${daysLate(t.due)}일 지남`));
     else if(showDue&&t.due)tx.append(el('span',{class:'when'},fmtDue(t.due)));
     r.append(cb,tx);
     if(showDue&&t.due&&!late)r.append(el('span',{class:'d'},fmtDue(t.due)));
-    r.append(el('button',{class:'nt',title:t.note.path,onclick:()=>openNote(t.note)},t.note.folder==='01_Daily'?'데일리':t.note.title));
-    if(!done){const di=el('input',{type:'date',class:'ppdate','aria-label':'날짜 바꾸기',value:t.due||'',onclick:e=>e.stopPropagation(),onchange:()=>{if(di.value)postponeTodo(t,di.value);}});
-      r.append(el('button',{class:'pp',title:'내일로',onclick:()=>postponeTodo(t,addDays(td,1))},'→ 내일'),el('button',{class:'pp',title:'날짜 바꾸기',onclick:()=>{di.showPicker?.();di.focus();}},'📅'),di);}
+    r.append(el('button',{class:'nt',title:t.note.path,onclick:()=>openNote(t.note)},t.kind==='note'?'노트 · '+t.note.folder.replace(/^\d+_/,''):t.note.folder==='01_Daily'?'데일리':t.note.title));
+    const move=ds=>t.kind==='note'?saveNote(t.note,{due:ds},undefined,undefined,true).then(render):postponeTodo(t,ds);
+    if(!done){const di=el('input',{type:'date',class:'ppdate','aria-label':'날짜 바꾸기',value:t.due||'',onclick:e=>e.stopPropagation(),onchange:()=>{if(di.value)move(di.value);}});
+      r.append(el('button',{class:'pp',title:'내일로',onclick:()=>move(addDays(td,1))},'→ 내일'),el('button',{class:'pp',title:'날짜 바꾸기',onclick:()=>{di.showPicker?.();di.focus();}},'📅'),di);}
     return r;};
 
   // 날짜 상자: 기본은 오늘. 입력창에서 날짜를 고르거나 글에서 읽으면 그 날짜로 바뀐다
