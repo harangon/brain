@@ -141,6 +141,10 @@ td input.inl{width:118px}
 .tdadd .chips{gap:4px}
 .tdadd .chip{padding:4px 10px;border-radius:14px;border:1px solid var(--line);font-size:12.5px;color:var(--fg2);background:var(--bg)}
 .tdadd .chip[aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
+.tdprev{font-size:12.5px;color:var(--fg2);margin:-8px 0 0 4px;min-height:16px}
+.chipdate{padding:3px 6px;border:1px solid var(--line);border-radius:8px;font-size:12.5px;background:var(--bg)}
+.ppdate{width:0;height:0;opacity:0;border:0;padding:0;margin:0;position:absolute}
+.trow{position:relative}
 .tdadd select{padding:7px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:13px;color:var(--fg2);max-width:180px}
 .tdtoday{border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));background:color-mix(in srgb,var(--accent) 6%,var(--bg));border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
 .tdtoday h2{margin:0;font-size:16px;font-weight:700;display:flex;gap:10px;align-items:baseline}
@@ -952,7 +956,21 @@ async function addTodoLine(targetPath,text,due){
   else body=body.replace(/\s*$/,'')+`\n\n${head}\n${line}\n`;
   await saveNote(n,{},undefined,stripH1(body),true);render();
 }
-let todoNote='',todoDue='today',todoTarget='daily';
+let todoNote='',todoDue='today',todoDate='',todoTarget='daily',todoRefocus=false;
+/* 글 속의 날짜 표현을 읽는다: 오늘·내일·모레, 금요일, 다음주 수, 11/20, 20일, 2026-11-20 */
+function parseWhen(text){
+  const td=today();const base=new Date(td+'T00:00');const f=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const rules=[
+    [/(^|\s)(오늘)(\s|$)/,()=>td],[/(^|\s)(내일)(\s|$)/,()=>addDays(td,1)],[/(^|\s)(모레)(\s|$)/,()=>addDays(td,2)],[/(^|\s)(글피)(\s|$)/,()=>addDays(td,3)],
+    [/(^|\s)((?:(이번\s*주|다음\s*주|다담주|다다음\s*주)\s*([월화수목금토일])(?:요일|욜)?|([월화수목금토일])(?:요일|욜))(?:까지)?)(\s|$)/,(m)=>{const wd='일월화수목금토'.indexOf(m[4]||m[5]);const d=new Date(base);let diff=(wd-d.getDay()+7)%7;const pre=m[3]||'';
+      if(/다다음/.test(pre))diff+=14;else if(/다음|다담/.test(pre)){diff=((wd-d.getDay()+7)%7)+7-(d.getDay()===0?7:0);if(diff>=14)diff-=7;}else if(diff===0&&!/이번/.test(pre))diff=7;
+      d.setDate(d.getDate()+diff);return f(d);}],
+    [/(^|\s)((\d{4})-(\d{2})-(\d{2}))(\s|$)/,(m)=>m[2]],
+    [/(^|\s)((\d{1,2})[\/.](\d{1,2})\.?)(\s|$)/,(m)=>{let d=new Date(base.getFullYear(),Number(m[3])-1,Number(m[4]));if(d<base)d.setFullYear(d.getFullYear()+1);return f(d);}],
+    [/(^|\s)((\d{1,2})일(?:까지)?)(\s|$)/,(m)=>{let d=new Date(base.getFullYear(),base.getMonth(),Number(m[3]));if(d<base)d.setMonth(d.getMonth()+1);return f(d);}]];
+  for(const[re,fn]of rules){const m=text.match(re);if(m){const due=fn(m);if(!due||isNaN(new Date(due+'T00:00')))continue;const rest=(text.slice(0,m.index)+' '+text.slice(m.index+m[0].length)).replace(/\s+/g,' ').trim();return{due,rest,token:m[2].trim()};}}
+  return null;
+}
 const todoOpen=JSON.parse(localStorage.getItem('brain.todoOpen')||'{}');
 const WD=['일','월','화','수','목','금','토'];
 function fmtDue(ds){const d=new Date(ds+'T00:00');return `${WD[d.getDay()]} ${ds.slice(5).replace('-','-')}`;}
@@ -972,15 +990,24 @@ function renderTodo(m){
 
   // 빠른 추가
   const targets=[['daily','데일리 노트'],...notes.filter(n=>['10_Projects','20_Areas'].includes(n.folder)&&n.fm.status!=='archived'&&n.fm.status!=='done').sort((a,b)=>a.title.localeCompare(b.title)).map(n=>[n.path,n.title])];
-  const inp=el('input',{type:'text',placeholder:'할 일 적고 Enter',autocomplete:'off','aria-label':'할 일 추가'});
+  const inp=el('input',{type:'text',placeholder:'할 일 적고 Enter — "금요일 보고서", "11/20 치과"처럼 날짜를 같이 써도 됩니다',autocomplete:'off','aria-label':'할 일 추가'});
   const chips=el('div',{class:'chips',role:'group','aria-label':'날짜'});
-  const dueOpts=[['today','오늘',td],['tomorrow','내일',addDays(td,1)],['nextweek','다음 주',nextMonday()],['none','날짜 없음',null]];
-  for(const[id,name]of dueOpts)chips.append(el('button',{type:'button',class:'chip','aria-pressed':String(todoDue===id),onclick:()=>{todoDue=id;chips.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',String(c.textContent===name)));inp.focus();}},name));
-  const sel=el('select',{'aria-label':'저장할 노트',onchange:()=>{todoTarget=sel.value;}});for(const[v,name]of targets)sel.append(el('option',{value:v},name));sel.value=targets.some(t=>t[0]===todoTarget)?todoTarget:'daily';
-  const submit=async()=>{const text=inp.value.trim();if(!text)return;const due=dueOpts.find(o=>o[0]===todoDue)[2];inp.value='';inp.disabled=true;
-    await addTodoLine(sel.value==='daily'?`01_Daily/${td}.md`:sel.value,text,due);};
-  inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();submit();}};
-  main.append(el('div',{class:'tdadd'},inp,chips,sel));
+  const dateIn=el('input',{type:'date',class:'chipdate','aria-label':'날짜 선택',value:todoDate,onchange:()=>{todoDate=dateIn.value;todoDue=todoDate?'date':'today';paint();inp.focus();}});
+  const dueOpts=[['today','오늘',()=>td],['tomorrow','내일',()=>addDays(td,1)],['date','날짜…',()=>todoDate||null],['none','나중에',()=>null]];
+  const preview=el('div',{class:'tdprev','aria-live':'polite'});
+  const sectionOf=due=>!due?['나중에','날짜 없음 칸에 들어갑니다']:due<td?['지연','오늘 상자(지연)']:due===td?['오늘','오늘 상자']:due<=wk?['이번 주',`이번 주 · ${fmtDue(due)}`]:['이후',`이후 · ${fmtDue(due)}`];
+  const effective=()=>{const w=parseWhen(inp.value);if(w)return{due:w.due,from:'text',token:w.token,rest:w.rest};const o=dueOpts.find(o=>o[0]===todoDue);return{due:o?o[2]():td,from:'chip',rest:inp.value.trim()};};
+  const paint=()=>{const e=effective();chips.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',String(e.from==='chip'&&c.dataset.id===todoDue)));
+    dateIn.style.display=todoDue==='date'?'':'none';chips.querySelector('[data-id=date]').textContent=todoDue==='date'&&todoDate?fmtDue(todoDate):'날짜…';
+    const[sec,desc]=sectionOf(e.due);preview.textContent=inp.value.trim()?`→ ${desc}${e.from==='text'?` (“${e.token}”에서 읽음)`:''} · ${sel.selectedOptions[0]?.textContent||''}`:'';};
+  for(const[id,name]of dueOpts)chips.append(el('button',{type:'button',class:'chip','data-id':id,onclick:()=>{todoDue=id;if(id==='date'){dateIn.style.display='';dateIn.showPicker?.();}paint();if(id!=='date')inp.focus();}},name));
+  chips.append(dateIn);
+  const sel=el('select',{'aria-label':'저장할 노트',onchange:()=>{todoTarget=sel.value;paint();inp.focus();}});for(const[v,name]of targets)sel.append(el('option',{value:v},name));sel.value=targets.some(t=>t[0]===todoTarget)?todoTarget:'daily';
+  const submit=async()=>{const e=effective();const text=e.rest;if(!text)return;inp.value='';paint();todoRefocus=true;
+    await addTodoLine(sel.value==='daily'?`01_Daily/${td}.md`:sel.value,text,e.due);};
+  inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();submit();}};inp.oninput=paint;
+  main.append(el('div',{class:'tdadd'},inp,chips,sel),preview);paint();
+  if(todoRefocus){todoRefocus=false;setTimeout(()=>inp.focus(),0);}
 
   const row=(t,{showDue=true,late=false,done=false}={})=>{
     const r=el('div',{class:'trow'+(done?' done':'')});
@@ -991,7 +1018,8 @@ function renderTodo(m){
     r.append(cb,tx);
     if(showDue&&t.due&&!late)r.append(el('span',{class:'d'},fmtDue(t.due)));
     r.append(el('button',{class:'nt',title:t.note.path,onclick:()=>openNote(t.note)},t.note.folder==='01_Daily'?'데일리':t.note.title));
-    if(!done)r.append(el('button',{class:'pp',title:'내일로',onclick:()=>postponeTodo(t,addDays(td,1))},'→ 내일'),el('button',{class:'pp',title:'다음 주 월요일로',onclick:()=>postponeTodo(t,nextMonday())},'→ 다음 주'));
+    if(!done){const di=el('input',{type:'date',class:'ppdate','aria-label':'날짜 바꾸기',value:t.due||'',onclick:e=>e.stopPropagation(),onchange:()=>{if(di.value)postponeTodo(t,di.value);}});
+      r.append(el('button',{class:'pp',title:'내일로',onclick:()=>postponeTodo(t,addDays(td,1))},'→ 내일'),el('button',{class:'pp',title:'날짜 바꾸기',onclick:()=>{di.showPicker?.();di.focus();}},'📅'),di);}
     return r;};
 
   // 오늘 상자
@@ -1014,7 +1042,7 @@ function renderTodo(m){
     for(const t of list.sort(byDue))sec.append(row(t,opts));main.append(sec);};
   section('week','이번 주',week);
   section('later','이후',later,{},true);
-  section('nodate','날짜 없음',nodate,{showDue:false},true);
+  section('nodate','나중에 (날짜 없음)',nodate,{showDue:false},true);
   section('done','오늘 완료',doneToday,{showDue:false,done:true},true);
   if(!open.length&&!doneToday.length)main.append(el('div',{class:'status'},'할 일이 없습니다. 위 입력창에 적거나, 노트 본문에 - [ ] 내용 📅 YYYY-MM-DD 로 쓰세요.'));
 
