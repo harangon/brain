@@ -1426,7 +1426,7 @@ async function relocate(n,path,quiet,over){
   try{await api.del(from,n.sha,`web: 정리 ${n.title}`.slice(0,70));}
   catch(e){try{await api.del(path,r.content.sha,'web: 정리 취소');}catch{}if(!quiet)toast('옮기지 못했습니다: '+e.message,4000);return false;}
   Object.assign(n,{path,folder:path.split('/')[0],sha:r.content.sha},over?{raw:over.raw,fm:over.fm}:{});if(!h1Of(n.body))n.title=fileTitle(path);
-  saveCache();if(current===n)paintHead(n);render();return true;
+  saveCache();if(current===n){paintHead(n);if($('#panel').classList.contains('cardmode')&&!descEditing)renderCard(n);}render();return true;
 }
 async function settle(n,renamed){
   if(!n.sha||!navigator.onLine)return;
@@ -1447,9 +1447,13 @@ async function archiveNote(n){
 }
 async function unarchive(n){
   const ty=typeOf(n);const fm={...n.fm,updated:today()};delete fm.archived;if(fm.status==='archived')delete fm.status;normFM(fm,ty);
-  if(n.folder!==ARCHIVE_FOLDER){await saveNote(n,{archived:'',status:fm.status||''},undefined,undefined,true);toast('되살렸습니다');return;}
+  if(ty==='project'&&fm.status==='done')fm.status='active';   // 끝낸 프로젝트를 되살리면 다시 진행
+  // 프로젝트와 함께 보관했던 미완료 할 일도 같이 되살린다
+  const after=async()=>{fillFolders();if(ty==='project')for(const t of notes.filter(x=>x!==n&&typeOf(x)==='todo'&&isArchived(x)&&x.fm.status!=='done'&&projectOf(x)===n.title))await unarchive(t);
+    if(current===n&&$('#panel').classList.contains('cardmode'))renderCard(n);render();};
+  if(n.folder!==ARCHIVE_FOLDER){await saveNote(n,{archived:'',status:fm.status||''},undefined,undefined,true);await after();toast('되살렸습니다');return;}
   const raw=buildFM(fm)+n.body.replace(/^\n+/,'');const dir=FOLDER_OF[ty];
-  if(await relocate(n,uniquePath(dir,fileTitle(n.path),n),false,{raw,fm}))toast('되살렸습니다');
+  if(await relocate(n,uniquePath(dir,fileTitle(n.path),n),false,{raw,fm})){await after();toast('되살렸습니다');}
 }
 /* 종류 바꾸기: 노트 → 할 일, 할 일 → 프로젝트, 할 일 → 노트 */
 async function convert(n,to){

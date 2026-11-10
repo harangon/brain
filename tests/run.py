@@ -113,6 +113,18 @@ def t_project(pg):
     assert '90_Archive/비용 비교.md' in f and '11_Todos/업체 견적 받기.md' in f and 'project' not in fget(pg,'11_Todos/업체 견적 받기.md')
     assert 'project: "[[집 정리]]"' in fget(pg,'20_Notes/수납장 문서 요약.md');close(pg)
     view(pg,'모든 노트');open_row(pg,'수납장 문서 요약');assert '(보관됨)' in pg.inner_text('#card [data-chip=project]');close(pg)
+def t_project_restore(pg):
+    # 미완료 할 일을 함께 보관한 프로젝트를 되살리면: 다시 진행 상태, 카드에서 '보관됨'이 사라지고, 그 할 일도 돌아온다
+    n=pg.evaluate("createNote({type:'project',title:'임시 프로젝트',quiet:true}).then(()=>createNote({type:'todo',title:'임시 할 일',project:'임시 프로젝트'})).then(()=>1)");idle(pg)
+    view(pg,'프로젝트');pg.click('.board .card:has-text("임시 프로젝트")');idle(pg)
+    act(pg,'프로젝트 끝내기');pg.select_option('#askField select','archive');ok(pg);idle(pg,900)
+    assert '90_Archive/임시 프로젝트.md' in files(pg) and '90_Archive/임시 할 일.md' in files(pg),files(pg)
+    assert '되살리기' in pg.inner_text('#card .actions') and '보관됨' in pg.inner_text('#card .chiprow')
+    act(pg,'되살리기');idle(pg,1200)
+    c=fget(pg,'10_Projects/임시 프로젝트.md');assert c and 'status: active' in c and 'archived' not in c,c
+    assert '보관됨' not in pg.inner_text('#card .chiprow') and '프로젝트 끝내기' in pg.inner_text('#card .actions')
+    assert '11_Todos/임시 할 일.md' in files(pg) and 'archived' not in fget(pg,'11_Todos/임시 할 일.md') and '임시 할 일' in pg.inner_text('#card')
+    close(pg);tab(pg,'할 일');assert '임시 프로젝트' in pg.inner_text('.tdside');tab(pg,'노트')
 def t_delete_project(pg):
     view(pg,'프로젝트');pg.click('.board .card:has-text("블로그 새단장")');idle(pg);pg.click('#card .actions .danger');assert '프로젝트 없음' in pg.inner_text('#askMsg');ok(pg);idle(pg,600)
     assert '10_Projects/블로그 새단장.md' not in files(pg) and 'project' not in fget(pg,'11_Todos/도메인 연장.md')
@@ -148,7 +160,7 @@ def t_unit(pg):
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
-TESTS=[t_unit,t_load,t_suggest,t_keep,t_quick,t_views,t_archive_view,t_todo,t_convert,t_rename,t_project,t_delete_project,t_misc,t_docs_rename,t_offline]
+TESTS=[t_unit,t_load,t_suggest,t_keep,t_quick,t_views,t_archive_view,t_todo,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_offline]
 with sync_playwright() as p:
     b=p.chromium.launch();pg=b.new_page(viewport={'width':1280,'height':860});errs=[]
     pg.on('pageerror',lambda e:errs.append(str(e)));pg.on('console',lambda m:errs.append('console: '+m.text) if m.type=='error' else None)
