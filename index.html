@@ -505,7 +505,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
 'use strict';
 /* ===================== 상수·상태 ===================== */
 const LS='brain.cfg', CONFIG_PATH='_scripts/brain.config.json';
-const FOLDERS=['00_Inbox','01_Daily','10_Projects','20_Areas','30_Resources','40_Notes','50_MOC','90_Archive'];
+const FOLDERS=['00_Inbox','01_Daily','10_Projects','11_Todos','20_Areas','30_Resources','40_Notes','50_MOC','90_Archive'];
 const COLORS=['gray','blue','green','yellow','red','purple','orange'];
 const DEFAULT_CONFIG={
   statuses:[{id:'active',name:'진행',color:'blue'},{id:'paused',name:'보류',color:'yellow'},{id:'done',name:'완료',color:'green'},{id:'archived',name:'보관',color:'gray'}],
@@ -562,7 +562,7 @@ function progressOf(n){let t=0,d=0;for(const ln of n.body.split('\n')){const x=p
 function doneBox(n){if(!labelsOf(n).includes('todo'))return'';const done=n.fm.status==='done';
   return el('input',{type:'checkbox',class:'nd',checked:done?'':null,'aria-label':done?'완료 해제':'완료',title:'완료 = status: done',onclick:e=>e.stopPropagation(),onchange:async e=>{await saveNote(n,{status:e.target.checked?'done':''},undefined,undefined,true);}});}
 function progEl(n){const{t,d}=progressOf(n);if(!t)return'';return el('span',{class:'prog'+(d===t?' full':''),title:`할 일 ${d}/${t}`},el('i',{},el('b',{style:`width:${Math.round(d/t*100)}%`})),`${d}/${t}`);}
-const RESERVED=new Set(['type','status','label','due','created','updated','related','permanent-candidate','order','cover','source']);
+const RESERVED=new Set(['project','protected','type','status','label','due','created','updated','related','permanent-candidate','order','cover','source']);
 
 /* ===================== GitHub API ===================== */
 const api={
@@ -790,7 +790,7 @@ async function load(){
       if(need.length>16)$('#main').innerHTML=`<div class="status">불러오는 중… <b>${done}/${need.length}</b></div>`;
     }
     for(const it of queue.list){if(it.op==='put'&&!out.some(n=>n.path===it.path)&&cache[it.path])out.push(cache[it.path]);}
-    notes=out;loadError='';saveCache();fillFolders();restoreControls();render();queue.badge();queue.flush();
+    notes=out;loadError='';saveCache();fillFolders();restoreControls();render();queue.badge();queue.flush();ensureDefaultProject();
   }catch(e){
     const cache=JSON.parse(localStorage.getItem('brain.cache')||'{}');
     if(isNetErr(e)&&Object.keys(cache).length){notes=Object.values(cache);fillFolders();restoreControls();render();queue.badge();toast('오프라인 — 마지막으로 받은 내용을 보여줍니다',3000);return;}
@@ -990,10 +990,27 @@ function renderGallery(v,m){
 /* 할 일 = label: todo 노트 하나. due 는 선택, 완료 = status: done.
    노트 안의 - [ ] 줄은 그 노트의 체크리스트일 뿐 여기 나오지 않는다 */
 const isTodoNote=n=>labelsOf(n).includes('todo')&&n.folder!=='90_Archive'&&n.fm.status!=='archived';
-async function addTodoNote(text,due,quiet){
-  const title=text.trim();if(!title)return false;const path=`00_Inbox/${today()}-${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return false;}
-  const fm={type:'inbox',label:'todo',created:today()};if(due)fm.due=due;
-  const raw=buildFM(fm)+`# ${title}\n\n`;const parsed=parseFM(raw);const n={path,sha:null,raw,fm:parsed.fm,body:parsed.body,title,folder:'00_Inbox'};
+/* 모든 할 일은 프로젝트 하나에 속한다. 기본은 지울 수 없는 ToDo 프로젝트 */
+const DEFAULT_PROJECT='ToDo',DEFAULT_PROJECT_PATH='10_Projects/ToDo.md',TODO_FOLDER='11_Todos';
+const isProtected=n=>!!n&&(n.path===DEFAULT_PROJECT_PATH||n.fm.protected===true);
+const isProjectNote=n=>n.folder==='10_Projects'&&n.path.split('/').length===2&&!isTodoNote(n);
+const projectList=()=>{const t=notes.filter(n=>isProjectNote(n)&&!['done','archived'].includes(n.fm.status)).map(n=>n.title).filter(x=>x!==DEFAULT_PROJECT).sort((a,b)=>a.localeCompare(b));return[DEFAULT_PROJECT,...t];};
+const projectOf=n=>{const v=String(n.fm.project||'').replace(/^\[\[|\]\]$/g,'').trim();return v||DEFAULT_PROJECT;};
+const todosOf=title=>notes.filter(n=>isTodoNote(n)&&projectOf(n)===title);
+async function ensureDefaultProject(){
+  if(notes.some(n=>n.path===DEFAULT_PROJECT_PATH)||queue.list.some(x=>x.path===DEFAULT_PROJECT_PATH))return;
+  const raw=buildFM({type:'project',status:'active',protected:true,created:today()})+`# ${DEFAULT_PROJECT}\n\n기본 할 일 프로젝트. 프로젝트를 정하지 않은 할 일이 여기에 모입니다. 지우지 않습니다.\n`;
+  const{fm,body}=parseFM(raw);const n={path:DEFAULT_PROJECT_PATH,sha:null,raw,fm,body,title:DEFAULT_PROJECT,folder:'10_Projects'};
+  try{const r=await api.put(DEFAULT_PROJECT_PATH,raw,null,'web: 기본 ToDo 프로젝트 생성');n.sha=r.content.sha;notes.push(n);saveCache();fillFolders();render();}catch(e){}
+}
+async function archiveDoneTodos(list){
+  if(!list.length)return;if(!await confirmAsk('완료된 할 일을 보관할까요?',`${list.length}개를 90_Archive로 옮깁니다 (status: archived).`,'보관'))return;
+  for(const n of list)await moveNote(n,'90_Archive',{status:'archived'});render();
+}
+async function addTodoNote(text,due,quiet,project){
+  const title=text.trim();if(!title)return false;const path=`${TODO_FOLDER}/${today()}-${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return false;}
+  const fm={type:'todo',label:'todo',project:project||DEFAULT_PROJECT,created:today()};if(due)fm.due=due;
+  const raw=buildFM(fm)+`# ${title}\n\n`;const parsed=parseFM(raw);const n={path,sha:null,raw,fm:parsed.fm,body:parsed.body,title,folder:TODO_FOLDER};
   try{const r=await api.put(path,raw,null,`web: 할 일 ${title}`);n.sha=r.content.sha;}
   catch(e){if(isNetErr(e))queue.push({op:'put',path,content:raw,message:`web: 할 일 ${title}`,base:null});else{toast('생성 실패: '+e.message,4000);return false;}}
   notes.unshift(n);saveCache();fillFolders();if(!quiet)render();return true;
@@ -1012,7 +1029,7 @@ function parseWhen(text){
   for(const[re,fn]of rules){const m=text.match(re);if(m){const due=fn(m);if(!due||isNaN(new Date(due+'T00:00')))continue;const rest=(text.slice(0,m.index)+' '+text.slice(m.index+m[0].length)).replace(/\s+/g,' ').trim();return{due,rest,token:m[2].trim()};}}
   return null;
 }
-let todoFolder='',todoDue='today',todoDate='',todoRefocus=false;
+let todoFolder='',todoDue='today',todoDate='',todoRefocus=false,todoProject=DEFAULT_PROJECT;
 const todoOpen=JSON.parse(localStorage.getItem('brain.todoOpen')||'{}');
 const WD=['일','월','화','수','목','금','토'];
 function fmtDue(ds){const d=new Date(ds+'T00:00');return `${WD[d.getDay()]} ${ds.slice(5)}`;}
@@ -1020,15 +1037,16 @@ function daysLate(ds){return Math.round((new Date(today()+'T00:00')-new Date(ds+
 function renderTodo(m){
   readControls();const q=state.q.trim().toLowerCase(),f=state.folder;const td=today(),wk=addDays(td,7);
   const all=notes.filter(isTodoNote).filter(n=>(!f||n.folder===f)).map(n=>({note:n,text:n.title,due:n.fm.due||null,done:n.fm.status==='done'}));
-  const perFolder=new Map();for(const t of all){const k=t.note.folder;const e=perFolder.get(k)||{key:k,title:k.replace(/^\d+_/,''),open:0,total:0};e.total++;if(!t.done)e.open++;perFolder.set(k,e);}
-  const items=all.filter(t=>(!todoFolder||t.note.folder===todoFolder)&&(!q||t.text.toLowerCase().includes(q)));
+  const perFolder=new Map();for(const pn of projectList())perFolder.set(pn,{key:pn,title:pn,open:0,total:0});
+  for(const t of all){const k=projectOf(t.note);const e=perFolder.get(k)||{key:k,title:k,open:0,total:0};e.total++;if(!t.done)e.open++;perFolder.set(k,e);}
+  const items=all.filter(t=>(!todoFolder||projectOf(t.note)===todoFolder)&&(!q||t.text.toLowerCase().includes(q)));
   const open=items.filter(t=>!t.done);
   const overdue=open.filter(t=>t.due&&t.due<td),todayL=open.filter(t=>t.due===td),week=open.filter(t=>t.due>td&&t.due<=wk),later=open.filter(t=>t.due>wk),nodate=open.filter(t=>!t.due);
   const doneToday=items.filter(t=>t.done&&t.note.fm.updated===td);
   const byDue=(a,b)=>{const x=a.due||'9',y=b.due||'9';if(x!==y)return x<y?-1:1;return (a.note.fm.created||'')<(b.note.fm.created||'')?1:-1;};
   const wrap=el('div',{class:'tdwrap'});const main=el('div',{class:'tdmain'});
 
-  // 빠른 추가 → Inbox 에 할 일 노트
+  // 빠른 추가 → 11_Todos 에 할 일 노트 (프로젝트 선택, 기본 ToDo)
   const box=el('section',{class:'tdtoday'});var boxReady=false;
   const inp=el('input',{type:'text',placeholder:'할 일 적고 Enter (예: 금요일 보고서, 11/20 치과)',autocomplete:'off','aria-label':'할 일 추가'});
   const chips=el('div',{class:'chips',role:'group','aria-label':'날짜'});
@@ -1040,13 +1058,15 @@ function renderTodo(m){
   const paint=()=>{const e=effective();chips.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',String(e.from==='chip'&&c.dataset.id===todoDue)));
     dateIn.style.display=todoDue==='date'?'':'none';chips.querySelector('[data-id=date]').textContent=todoDue==='date'&&todoDate?fmtDue(todoDate):'날짜…';
     const[sec,desc]=sectionOf(e.due);preview.innerHTML='';
-    if(inp.value.trim()||todoDue!=='none')preview.append(el('span',{},inp.value.trim()?`→ ${desc}${e.from==='text'?` (“${e.token}”에서 읽음)`:''} · Inbox에 할 일 노트로`:`→ ${desc}`));
+    if(inp.value.trim()||todoDue!=='none')preview.append(el('span',{},inp.value.trim()?`→ ${desc}${e.from==='text'?` (“${e.token}”에서 읽음)`:''} · 프로젝트 ${psel.value}`:`→ ${desc}`));
     if(boxReady)syncBox();};
   for(const[id,name]of dueOpts)chips.append(el('button',{type:'button',class:'chip','data-id':id,onclick:()=>{todoDue=id;if(id==='date'){dateIn.style.display='';dateIn.showPicker?.();}paint();if(id!=='date')inp.focus();}},name));
   chips.append(dateIn);
-  const submit=async()=>{const e=effective();const text=e.rest;if(!text)return;inp.value='';paint();todoRefocus=true;await addTodoNote(text,e.due);};
+  const plist=projectList();if(todoFolder&&plist.includes(todoFolder))todoProject=todoFolder;
+  const psel=el('select',{'aria-label':'프로젝트',title:'프로젝트',onchange:()=>{todoProject=psel.value;paint();inp.focus();}});for(const pn of plist)psel.append(el('option',{value:pn},pn));psel.value=plist.includes(todoProject)?todoProject:DEFAULT_PROJECT;
+  const submit=async()=>{const e=effective();const text=e.rest;if(!text)return;inp.value='';paint();todoRefocus=true;await addTodoNote(text,e.due,false,psel.value);};
   inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();submit();}};inp.oninput=paint;
-  main.append(el('div',{class:'tdadd'},inp,chips),preview,box);paint();
+  main.append(el('div',{class:'tdadd'},inp,chips,psel),preview,box);paint();
   if(todoRefocus){todoRefocus=false;setTimeout(()=>inp.focus(),0);}
 
   const row=(t,{showDue=true,late=false,done=false}={})=>{
@@ -1057,7 +1077,7 @@ function renderTodo(m){
     else if(showDue&&t.due)tx.append(el('span',{class:'when'},fmtDue(t.due)));
     r.append(cb,tx);
     if(showDue&&t.due&&!late)r.append(el('span',{class:'d'},fmtDue(t.due)));
-    r.append(el('button',{class:'nt',title:n.path,onclick:()=>openNote(n)},n.folder.replace(/^\d+_/,'')+(progressOf(n).t?` · ${progressOf(n).d}/${progressOf(n).t}`:'')));
+    r.append(el('button',{class:'nt',title:n.path,onclick:()=>openNote(n)},projectOf(n)+(progressOf(n).t?` · ${progressOf(n).d}/${progressOf(n).t}`:'')));
     const move=ds=>saveNote(n,{due:ds},undefined,undefined,true).then(render);
     if(!done){const di=el('input',{type:'date',class:'ppdate','aria-label':'날짜 바꾸기',value:t.due||'',onclick:e=>e.stopPropagation(),onchange:()=>{if(di.value)move(di.value);}});
       r.append(el('button',{class:'pp',title:'내일로',onclick:()=>move(addDays(td,1))},'→ 내일'),el('button',{class:'pp',title:'날짜 바꾸기',onclick:()=>{di.showPicker?.();di.focus();}},'📅'),di);
@@ -1091,16 +1111,17 @@ function renderTodo(m){
   section('later','이후',later,{},true);
   section('nodate','나중에 (날짜 없음)',nodate,{showDue:false},true);
   section('done','오늘 완료',doneToday,{showDue:false,done:true},true);
-  if(!open.length&&!doneToday.length)main.append(el('div',{class:'status'},'할 일이 없습니다. 위 입력창에 적으면 Inbox에 할 일 노트가 생깁니다.'));
+  if(!open.length&&!doneToday.length)main.append(el('div',{class:'status'},'할 일이 없습니다. 위 입력창에 적으면 할 일 노트가 생깁니다.'));
+  const doneAll=items.filter(t=>t.done).map(t=>t.note);if(doneAll.length)main.append(el('div',{style:'padding-top:8px'},el('button',{class:'btn sm',onclick:()=>archiveDoneTodos(doneAll)},`완료된 할 일 보관 (${doneAll.length})`)));
   syncBox();
 
-  // 폴더별 (PC: 오른쪽, 폰: 칩)
-  const list=[...perFolder.values()].sort((a,b)=>a.key.localeCompare(b.key));const totalOpen=all.filter(t=>!t.done).length;
-  const side=el('aside',{class:'tdside'},el('h4',{},'폴더별'));const chipsM=el('div',{class:'tdchips'});
+  // 프로젝트별 (PC: 오른쪽, 폰: 칩). ToDo 가 맨 위
+  const list=[...perFolder.values()];const totalOpen=all.filter(t=>!t.done).length;
+  const side=el('aside',{class:'tdside'},el('h4',{},'프로젝트별'));const chipsM=el('div',{class:'tdchips'});
   const mk=(key,title,open,total,holder)=>holder.append(el('button',{'aria-pressed':String(todoFolder===key),onclick:()=>{todoFolder=todoFolder===key?'':key;render();}},el('span',{},title),el('small',{},open===null?String(total):`${open}/${total}`)));
   mk('','전체',null,totalOpen,side);for(const e of list)mk(e.key,e.title,e.open,e.total,side);
   mk('','전체',null,totalOpen,chipsM);for(const e of list)mk(e.key,e.title,e.open,e.total,chipsM);
-  side.append(el('p',{class:'evnote',style:'margin:12px 0 0;line-height:1.5'},'할 일 하나 = 노트 하나 (label: todo). 체크 = status: done. 노트 안의 - [ ] 줄은 그 노트의 체크리스트이고 여기엔 안 나옵니다. /inbox가 Inbox의 할 일 노트를 정리합니다.'));
+  side.append(el('p',{class:'evnote',style:'margin:12px 0 0;line-height:1.5'},'할 일 하나 = 노트 하나, 프로젝트 하나에 속합니다 (기본 ToDo). 체크 = status: done. 프로젝트를 누르면 그 프로젝트 것만 보이고, 새 할 일도 거기로 들어갑니다.'));
   main.prepend(chipsM);wrap.append(main,side);m.append(wrap);
 }
 /* ===================== 달력 ===================== */
@@ -1237,12 +1258,13 @@ function saveNote(n,patch,newTitle,newBody,quiet,retry=true){
   saveLocks[n.path]=run.catch(()=>{});return run;
 }
 async function saveNoteNow(n,patch,newTitle,newBody,quiet,retry){
+  if(isProtected(n)){if(newTitle!==undefined&&newTitle!==n.title){newTitle=n.title;toast('기본 프로젝트 이름은 바꿀 수 없습니다');}if(patch&&['archived'].includes(patch.status)){toast('기본 프로젝트는 보관할 수 없습니다');patch={...patch};delete patch.status;}}
   const fm={...n.fm,...patch};const onlyOrder=Object.keys(patch).length===1&&'order'in patch&&newTitle===undefined&&newBody===undefined;if(!onlyOrder)fm.updated=today();
   const title=newTitle??n.title;const body=newBody??stripH1(n.body);
   const hasH1=!!h1Of(n.body)||(newTitle!==undefined&&newTitle!==n.title);
   const raw=buildFM(fm)+(hasH1?`# ${title}\n\n`:'')+body.replace(/^\n+/,'');
   if(current===n)$('#pMsg').textContent='저장 중…';
-  const apply=sha=>{Object.assign(n,{sha,raw,fm,body:(hasH1?`# ${title}\n\n`:'')+body,title:hasH1?title:fileTitle(n.path)});if(current===n&&$('#panel').classList.contains('cardmode')&&!descEditing)setTimeout(()=>renderCard(n),0);saveCache();if(current===n)$('#pMsg').textContent='';render();};
+  const apply=sha=>{const oldT=n.title;setTimeout(()=>{if(isProjectNote(n)&&oldT!==n.title)for(const t of notes.filter(x=>isTodoNote(x)&&x.fm.project===oldT))saveNote(t,{project:n.title},undefined,undefined,true);},0);Object.assign(n,{sha,raw,fm,body:(hasH1?`# ${title}\n\n`:'')+body,title:hasH1?title:fileTitle(n.path)});if(current===n&&$('#panel').classList.contains('cardmode')&&!descEditing)setTimeout(()=>renderCard(n),0);saveCache();if(current===n)$('#pMsg').textContent='';render();};
   try{
     const r=await api.put(n.path,raw,n.sha,`web: ${title}`);
     apply(r.content.sha);if(!quiet)toast('저장했습니다');
@@ -1305,7 +1327,7 @@ $('#pMore').onclick=e=>{e.stopPropagation();document.querySelectorAll('.menu').f
 async function duplicateNote(n){
   const title=(await ask('복제본 제목',{value:n.title+' 사본'})||'').trim();if(!title)return;
   const path=`${n.folder}/${slug(title)}.md`;if(notes.some(x=>x.path===path)){toast('같은 이름의 노트가 있습니다');return;}
-  const fm={...n.fm,created:today(),updated:today()};delete fm.order;
+  const fm={...n.fm,created:today(),updated:today()};delete fm.order;delete fm.protected;
   const body=(h1Of(n.body)?`# ${title}\n\n`:'')+stripH1(n.body).replace(/^\n+/,'');
   const raw=buildFM(fm)+body;const nn={path,sha:null,raw,fm,body,title,folder:n.folder};
   try{const r=await api.put(path,raw,null,`web: 복제 ${title}`);nn.sha=r.content.sha;}
@@ -1313,6 +1335,7 @@ async function duplicateNote(n){
   notes.unshift(nn);saveCache();fillFolders();render();openNote(nn);toast('복제했습니다');
 }
 async function moveNote(n,folder,patch={}){
+  if(isProtected(n)){toast('기본 프로젝트는 옮기거나 보관할 수 없습니다');return;}
   if(n.folder===folder){if(Object.keys(patch).length)await saveNote(n,patch,undefined,undefined,true);return;}
   const path=`${folder}/${n.path.split('/').pop()}`;if(n.path!==path&&notes.some(x=>x.path===path)){toast('대상 폴더에 같은 이름의 노트가 있습니다');return;}
   const fm={...n.fm,...patch,updated:today()};const raw=buildFM(fm)+n.body.replace(/^\n+/,'');
@@ -1326,7 +1349,7 @@ async function moveNotePrompt(n){
   const list=FOLDERS.filter(f=>f!==n.folder);const f=await ask('이동할 폴더',{options:list.map(x=>({value:x,label:x})),ok:'이동'});if(f)moveNote(n,f);
 }
 async function archiveNote(n){if(!await confirmAsk('보관할까요?',`"${n.title}" — status를 archived로 바꾸고 90_Archive로 옮깁니다.`,'보관'))return;await moveNote(n,'90_Archive',{status:'archived'});}
-$('#pDelete').onclick=async()=>{if(!current||!await confirmAsk('삭제할까요?',`"${current.title}" 노트가 저장소에서 지워집니다.`,'삭제'))return;
+$('#pDelete').onclick=async()=>{if(isProtected(current)){toast('기본 프로젝트는 삭제할 수 없습니다');return;}if(!current||!await confirmAsk('삭제할까요?',`"${current.title}" 노트가 저장소에서 지워집니다.`,'삭제'))return;
   const n=current;const done=()=>{notes=notes.filter(x=>x!==n);saveCache();closePanel();fillFolders();render();};
   try{await api.del(n.path,n.sha,`web: 삭제 ${n.title}`);done();toast('삭제했습니다');}
   catch(e){if(isNetErr(e)){queue.push({op:'del',path:n.path,message:`web: 삭제 ${n.title}`});done();toast('오프라인 — 연결되면 삭제됩니다');}else toast('삭제 실패: '+e.message,4000);}};
@@ -1357,6 +1380,7 @@ async function fromTemplate(name,title){
 }
 const TEMPLATE_OF={'10_Projects':'Project','20_Areas':'Area','30_Resources':'Resource','40_Notes':'Permanent','50_MOC':'MOC'};
 async function newFromTemplate(folder){
+  if(folder===TODO_FOLDER){const t=(await ask('새 할 일',{placeholder:'할 일 내용',msg:'ToDo 프로젝트에 만듭니다'})||'').trim();if(t)await addTodoNote(t,null);return;}
   const title=(await ask(`${folder.replace(/^\d+_/,'')}에 새 노트`,{placeholder:'제목'})||'').trim();if(!title)return;
   const path=`${folder}/${slug(title)}.md`;if(notes.some(n=>n.path===path)){toast('같은 이름의 노트가 있습니다');return;}
   let raw=await fromTemplate(TEMPLATE_OF[folder],title);
@@ -1377,7 +1401,7 @@ async function newWithDue(ds){
   notes.unshift(n);saveCache();fillFolders();render();openNote(n);
 }
 async function addTodoOn(ds){
-  const text=(await ask(`${ds} 할 일`,{placeholder:'할 일 내용',msg:'Inbox에 할 일 노트로 만듭니다'})||'').trim();if(!text)return;
+  const text=(await ask(`${ds} 할 일`,{placeholder:'할 일 내용',msg:'ToDo 프로젝트에 할 일 노트로 만듭니다'})||'').trim();if(!text)return;
   await addTodoNote(text,ds);
 }
 
@@ -1406,7 +1430,8 @@ function splitBody(body){
 function renderCard(n){
   const box=$('#card');box.innerHTML='';const{groups,desc}=splitBody(n.body);
   // 제목
-  const ti=el('input',{class:'ctitle',value:n.title,'aria-label':'제목',onkeydown:e=>{if(e.key==='Enter'){e.preventDefault();ti.blur();}},onblur:async()=>{const t=ti.value.trim();if(t&&t!==n.title)await saveNote(n,{},t,undefined,true);else ti.value=n.title;}});
+  const prot=isProtected(n);
+  const ti=el('input',{class:'ctitle',value:n.title,'aria-label':'제목',readonly:prot?'':null,title:prot?'기본 프로젝트 — 이름을 바꿀 수 없습니다':null,onkeydown:e=>{if(e.key==='Enter'){e.preventDefault();ti.blur();}},onblur:async()=>{const t=ti.value.trim();if(t&&t!==n.title)await saveNote(n,{},t,undefined,true);else ti.value=n.title;}});
   box.append(ti);
   // 칩 줄: 상태 · 라벨 · 마감 · 폴더
   const chips=el('div',{class:'chiprow'});
@@ -1415,7 +1440,10 @@ function renderCard(n){
   const ls=labelsOf(n);const lbChip=el('button',{class:'chip'+(ls.length?' set':''),title:'라벨',onclick:e=>{e.stopPropagation();labelPicker(n,lbChip);}},...(ls.length?ls.map(l=>tagEl(labelOpt(l),l)):['+ 라벨']));chips.append(lbChip);
   const dueChip=el('span',{class:'chip'+(n.fm.due?' set':''),title:'마감'},n.fm.due?'📅 '+fmtDue(n.fm.due)+(isLate(n)?' · 지남':''):'+ 마감');
   const dueIn=el('input',{type:'date','aria-label':'마감',value:n.fm.due||'',onchange:async e=>{await saveNote(n,{due:e.target.value},undefined,undefined,true);}});dueChip.append(dueIn);if(isLate(n))dueChip.style.color='var(--danger)';chips.append(dueChip);
-  chips.append(el('button',{class:'chip',title:'폴더 이동',onclick:()=>moveNotePrompt(n)},n.folder.replace(/^\d+_/,'')+(n.path.split('/').length>2?'/'+n.path.split('/').slice(1,-1).join('/'):'')));
+  if(isTodoNote(n)){const pj=projectOf(n);const pc=el('span',{class:'chip set',title:'프로젝트'},'▸ '+pj);const ps=el('select',{'aria-label':'프로젝트',onchange:async e=>{await saveNote(n,{project:e.target.value},undefined,undefined,true);render();}});
+    for(const pn of [...new Set([...projectList(),pj])])ps.append(el('option',{value:pn},pn));ps.value=pj;pc.append(ps);chips.append(pc);}
+  if(prot)chips.append(el('span',{class:'chip',title:'삭제·보관·이동·이름 변경 불가'},'기본 프로젝트'));
+  else chips.append(el('button',{class:'chip',title:'폴더 이동',onclick:()=>moveNotePrompt(n)},n.folder.replace(/^\d+_/,'')+(n.path.split('/').length>2?'/'+n.path.split('/').slice(1,-1).join('/'):'')));
   for(const pr of(config.props||[])){const v=n.fm[pr.id];if(v===''||v===undefined||v===false)continue;chips.append(el('span',{class:'chip set',title:pr.name},`${pr.name}: ${v===true?'✓':v}`));}
   box.append(chips);
   // 설명
@@ -1430,6 +1458,18 @@ function renderCard(n){
       d.querySelectorAll('a.wl').forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();const t=findNote(a.dataset.wl);t?openNote(t):toast('아직 없는 노트입니다');});}
     else d.textContent='설명 추가…';
     sec.append(d);box.append(sec);
+  }
+  // 프로젝트 카드: 이 프로젝트의 할 일 노트
+  if(isProjectNote(n)){
+    const tl=todosOf(n.title).sort((a,b)=>{const x=(a.fm.status==='done')-(b.fm.status==='done');if(x)return x;return (a.fm.due||'9')<(b.fm.due||'9')?-1:1;});const dn=tl.filter(t=>t.fm.status==='done').length;
+    const ps=el('section',{});ps.append(el('h3',{},'할 일',el('span',{class:'evnote'},tl.length?`${dn}/${tl.length}`:''),el('span',{class:'sp'})));
+    const cl=el('div',{class:'cl'});if(tl.length)cl.append(el('div',{class:'clbar'+(dn===tl.length?' full':'')},el('b',{style:`width:${Math.round(dn/tl.length*100)}%`})));
+    for(const t of tl){const done=t.fm.status==='done';cl.append(el('div',{class:'ci'+(done?' done':'')},
+      el('input',{type:'checkbox',checked:done?'':null,'aria-label':'완료',onchange:async e=>{await saveNote(t,{status:e.target.checked?'done':''},undefined,undefined,true);renderCard(n);}}),
+      el('button',{class:'t',style:'text-align:left',onclick:()=>openNote(t)},el('span',{class:'t'},t.title)),t.fm.due?el('span',{class:'due',style:!done&&t.fm.due<today()?'color:var(--danger)':''},fmtDue(t.fm.due)):''));}
+    const add=el('input',{placeholder:'+ 할 일 (Enter) — "금요일 보고서"처럼 날짜도 됩니다','aria-label':'할 일 추가',onkeydown:async e=>{if(e.key!=='Enter')return;e.preventDefault();const raw=add.value.trim();if(!raw)return;const w=parseWhen(raw);const text=w?w.rest:raw;if(!text)return;add.value='';
+      if(await addTodoNote(text,w?w.due:null,true,n.title)){render();renderCard(n);setTimeout(()=>$('#card .cl .add input')?.focus(),0);}}});
+    cl.append(el('div',{class:'add'},add));ps.append(cl);box.append(ps);
   }
   // 체크리스트
   const cls=el('section',{});cls.append(el('h3',{},'체크리스트',el('span',{class:'sp'}),el('button',{class:'btn sm',onclick:async()=>{const name=(await ask('새 체크리스트',{placeholder:'이름 (예: 준비)',value:'체크리스트'})||'').trim();if(!name)return;
@@ -1472,11 +1512,11 @@ function renderCard(n){
   box.append(el('div',{class:'actions'},
     el('button',{class:'btn sm',onclick:()=>$('#panel').classList.toggle('wide')},'넓게'),
     el('button',{class:'btn sm',onclick:()=>duplicateNote(n)},'복제'),
-    el('button',{class:'btn sm',onclick:()=>moveNotePrompt(n)},'이동'),
-    n.folder!=='90_Archive'?el('button',{class:'btn sm',onclick:()=>archiveNote(n)},'보관'):'',
+    prot?'':el('button',{class:'btn sm',onclick:()=>moveNotePrompt(n)},'이동'),
+    prot||n.folder==='90_Archive'?'':el('button',{class:'btn sm',onclick:()=>archiveNote(n)},'보관'),
     el('button',{class:'btn sm',onclick:()=>window.open(`https://github.com/${cfg.repo}/blob/${cfg.branch}/${encodeURI(n.path)}`,'_blank')},'GitHub'),
     el('span',{class:'sp'}),
-    el('button',{class:'btn sm danger',onclick:()=>$('#pDelete').click()},'삭제')));
+    prot?'':el('button',{class:'btn sm danger',onclick:()=>$('#pDelete').click()},'삭제')));
 }
 
 /* ===================== 이미지 첨부 ===================== */
