@@ -177,6 +177,7 @@ td input.inl{width:118px}
 .tdsec>button.hd small{color:var(--fg3);font-weight:400}
 .tdsec>button.hd .tri{color:var(--fg3);font-size:11px;width:10px}
 .tdchips{display:none}
+.padd{max-width:820px;margin-bottom:12px}.pstat{color:var(--fg3)}
 .lchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:0 0 10px}.lchips>span{font-size:12px;color:var(--fg3);margin-right:2px}
 .lchips button{white-space:nowrap;padding:3px 10px;border-radius:14px;border:1px solid var(--line);font-size:12.5px;color:var(--fg2)}.lchips button small{margin-left:5px;color:var(--fg3)}
 .lchips button[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg)}.lchips button[aria-pressed=true] small{color:inherit;opacity:.7}
@@ -403,6 +404,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   .tabs button{padding:4px 8px}
   td.t{min-width:140px}
   .col{flex-basis:220px}
+  .pboard .board{flex-direction:column;overflow:visible}.pboard .col{flex:none;width:100%;min-height:0}
   .hide-m{display:none}
   .sugl{display:none}
   .mmeta{display:block;font-size:12px;color:var(--fg3);margin-top:2px}.mmeta.late{color:var(--danger)}
@@ -426,6 +428,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
     <div class="tabs" role="tablist">
       <button role="tab" data-view="docs">문서</button>
       <button role="tab" data-view="notes" aria-selected="true">노트</button>
+      <button role="tab" data-view="projects">프로젝트</button>
       <button role="tab" data-view="todo">할 일</button>
       <button role="tab" data-view="calendar">일정</button>
     </div>
@@ -434,7 +437,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
       <button role="tab" data-view="board">보드</button>
       <button role="tab" data-view="gallery">갤러리</button>
     </div>
-    <span class="pill" id="pillGroup">그룹 <select id="fGroup"><option value="project">프로젝트</option><option value="label">라벨</option><option value="status">상태</option></select></span>
+    <span class="pill" id="pillGroup">그룹 <select id="fGroup"><option value="project">프로젝트</option><option value="label">라벨</option></select></span>
     <input class="search" id="q" type="search" placeholder="검색" aria-label="검색">
     <span class="sp"></span>
     <button class="icon" id="btnPalette" title="명령 (Ctrl+K)" aria-label="명령">⌘</button>
@@ -550,7 +553,7 @@ cfg.gcal=cfg.gcal||{url:'',key:'',cals:[],names:{}};
 let config=structuredClone(DEFAULT_CONFIG), configSha=null;
 let notes=[],loadError='';
 let state={view:'table',type:'note',project:'',status:'',label:'',group:'status',sort:'updated:-1',q:'',saved:'b:inbox',inbox:true,arch:false};
-try{const st=JSON.parse(localStorage.getItem('brain.state')||'{}');if(st&&'type'in st)Object.assign(state,st);else if(st&&['todo','calendar','docs'].includes(st.view))state.view=st.view;}catch{}
+try{const st=JSON.parse(localStorage.getItem('brain.state')||'{}');if(st&&'type'in st)Object.assign(state,st);else if(st&&['todo','calendar','docs','projects'].includes(st.view))state.view=st.view;}catch{}
 let current=null;
 const $=s=>document.querySelector(s);
 const el=(t,a={},...c)=>{const e=document.createElement(t);for(const[k,v]of Object.entries(a)){if(k==='class')e.className=v;else if(k.startsWith('on'))e.addEventListener(k.slice(2),v);else if(v!==null&&v!==undefined&&v!==false)e.setAttribute(k,v);}for(const x of c)if(x!==''&&x!==null&&x!==undefined)e.append(x);return e;};
@@ -859,18 +862,17 @@ function fillFolders(){}   // (예전 프로젝트 필터 목록 자리. 지금�
 function restoreControls(){$('#fGroup').value=state.group;$('#q').value=state.q;}
 function readControls(){state.group=$('#fGroup').value||'project';state.q=$('#q').value;}
 
-/* ===================== 보기: 정리 전 | 노트 · 프로젝트 | 보관함 ===================== */
+/* ===================== 노트 탭의 보기: 정리 전 | 노트 | 보관함 ===================== */
 const BUILTIN_VIEWS=[
   {id:'b:inbox',name:'정리 전',view:'table',type:'note',inbox:true,tip:'아직 확인하지 않은 노트 (프로젝트·라벨 없음)'},
   {id:'b:all',name:'노트',type:'note',group:'project',tip:'노트 전부'},
-  {id:'b:projects',name:'프로젝트',view:'board',type:'project',group:'status',tip:'프로젝트 전부'},
-  {id:'b:archive',name:'보관함',view:'table',type:'',arch:true,tip:'보관된 것 전부 (종류 무관)'}];
-function renderViews(){   // 정리 전 | 종류(노트·프로젝트) | 보관함
+  {id:'b:archive',name:'보관함',view:'table',type:'note',arch:true,tip:'보관한 노트'}];
+function renderViews(){   // 정리 전 | 노트 | 보관함
   const v=$('#views');v.innerHTML='';
   const chip=(sv,cls)=>{const cnt=sv.inbox?notes.filter(isLoose).length:0;
     v.append(el('button',{class:cls||'','data-id':sv.id,title:sv.tip||'','aria-pressed':state.saved===sv.id?'true':'false',onclick:()=>applyView(sv)},sv.name+(cnt?` ${cnt}`:'')));};
   const B=id=>BUILTIN_VIEWS.find(x=>x.id===id);
-  chip(B('b:inbox'),'inbox');v.append(el('span',{class:'vsep'}));chip(B('b:all'));chip(B('b:projects'));
+  chip(B('b:inbox'),'inbox');v.append(el('span',{class:'vsep'}));chip(B('b:all'));
   v.append(el('span',{class:'sp'}));chip(B('b:archive'),'arch');
 }
 async function applyView(sv){
@@ -882,7 +884,7 @@ async function applyView(sv){
 }
 function normState(){const b=BUILTIN_VIEWS.find(x=>x.id===state.saved)||BUILTIN_VIEWS[0];
   Object.assign(state,{saved:b.id,type:b.type??'',inbox:!!b.inbox,arch:!!b.arch,status:''});if(b.id!=='b:all')state.project='';if(b.inbox)state.label='';
-  if(!['project','label','status'].includes(state.group))state.group='project';}
+  if(!['project','label'].includes(state.group))state.group='project';}
 normState();
 /* ===================== 필터·정렬 ===================== */
 function visible(){
@@ -916,12 +918,12 @@ function noteSide(){
   side.append(el('p',{class:'evnote',style:'margin:12px 0 0;line-height:1.5'},'프로젝트나 라벨을 누르면 그것만 보이고, 새 메모도 거기로 들어갑니다. 다시 누르면 풀립니다.'));
   return{side,chips};
 }
-/* 프로젝트 보기·보관함의 라벨 칩 줄: 누르면 그 라벨만 */
-function labelBar(base){
+/* 프로젝트 탭·노트 보관함의 라벨 칩 줄: 누르면 그 라벨만 */
+function labelBar(base,get,set){
   const lb=new Map();let none=0;for(const n of base){const ls=labelsOf(n);if(!ls.length)none++;for(const l of ls)lb.set(l,(lb.get(l)||0)+1);}
-  if(state.label&&state.label!=='__none'&&!lb.has(state.label))lb.set(state.label,0);
+  const cur=get();if(cur&&cur!=='__none'&&!lb.has(cur))lb.set(cur,0);
   const bar=el('div',{class:'lchips'},el('span',{},'라벨'));
-  const mk=(v,title,cnt)=>bar.append(el('button',{'data-k':'label','data-v':v,'aria-pressed':String(state.label===v),onclick:()=>{state.label=state.label===v?'':v;render();}},title,el('small',{},String(cnt))));
+  const mk=(v,title,cnt)=>bar.append(el('button',{'data-k':'label','data-v':v,'aria-pressed':String(cur===v),onclick:()=>{set(cur===v?'':v);render();}},title,el('small',{},String(cnt))));
   mk('','전체',base.length);for(const o of config.labels)if(lb.has(o.id))mk(o.id,o.name,lb.get(o.id));
   for(const[id,c]of lb)if(!labelOpt(id))mk(id,id,c);
   if(lb.size&&none)mk('__none','라벨 없음',none);
@@ -943,20 +945,20 @@ function render(){
   document.querySelectorAll('#subtabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===state.view));
   $('#subtabs').style.display=isNotes?'':'none';
   $('#pillGroup').style.display=state.view==='board'?'':'none';
-  $('#q').style.display=(isNotes||state.view==='todo')?'':'none';
+  $('#q').style.display=(isNotes||state.view==='todo'||state.view==='projects')?'':'none';
   $('#views').style.display=isNotes?'':'none';
   renderViews();paintQuick(isNotes);saveState();
   if(state.view!=='docs')undockPanel();else{const p=$('#panel');if(p.classList.contains('docked'))document.body.append(p);}
   const m=$('#main');m.innerHTML='';
   if(state.view==='calendar')return renderCalendar(m);
   if(state.view==='docs')return renderDocs(m);
+  if(state.view==='projects')return renderProjects(m);
   if(state.view==='todo'){if(loadError)m.append(el('div',{class:'evnote',style:'margin-bottom:8px'},`노트를 불러오지 못했습니다: ${loadError}`));return renderTodo(m);}
   if(!notes.length){m.append(el('div',{class:'status'},loadError?`노트를 불러오지 못했습니다: ${loadError}`:'노트가 없습니다. 위 입력창에 첫 메모를 적어 보세요.'));return;}
   const v=visible();
   if(state.inbox&&state.view==='table')return renderInbox(v,m);
   let box=m;
-  if(state.saved==='b:projects')m.append(labelBar(notes.filter(n=>isProjectNote(n)&&!isArchived(n))));
-  if(state.saved==='b:archive')m.append(labelBar(notes.filter(isArchived)));
+  if(state.saved==='b:archive')m.append(labelBar(notes.filter(n=>isArchived(n)&&typeOf(n)==='note'),()=>state.label,v=>{state.label=v;}));
   if(state.saved==='b:all'){const{side,chips}=noteSide();box=el('div',{class:'nmain'});box.append(chips);m.append(el('div',{class:'tdwrap'},box,side));}   // 노트 보기: 옆에 프로젝트·라벨 목록
   if(!v.length){box.append(el('div',{class:'status'},state.arch?'보관된 노트가 없습니다.':state.inbox?'정리 전 노트가 없습니다.':state.q?'검색에 맞는 노트가 없습니다.':'여기에 해당하는 노트가 없습니다.'));return;}
   ({table:renderTable,board:renderBoard,gallery:renderGallery})[state.view](v,box);
@@ -1060,8 +1062,32 @@ function renderTable(v,m,mode=''){
     el('td',{class:'hide-m'},String(val(n,'updated')).slice(slim?5:0)));});
   m.append(el('table',{},el('thead',{},thead),el('tbody',{},...rows)));
 }
-function renderBoard(v,m){
-  const g=['status','label','project'].includes(state.group)?state.group:'project';const canDrag=true;
+/* ===================== 프로젝트 탭 ===================== */
+let projLabel='',projArchOpen=false;
+function projStat(n){const tl=todosOf(n.title),nl=notesOf(n.title);const d=tl.filter(t=>t.fm.status==='done').length;
+  return el('span',{class:'pstat'},[tl.length?`할 일 ${d}/${tl.length}`:'',nl.length?`노트 ${nl.length}`:''].filter(Boolean).join(' · '));}
+function renderProjects(m){
+  if(loadError)m.append(el('div',{class:'evnote',style:'margin-bottom:8px'},`노트를 불러오지 못했습니다: ${loadError}`));
+  state.q=$('#q').value;const q=state.q.trim().toLowerCase();
+  const all=notes.filter(n=>isProjectNote(n)&&!isArchived(n)),arch=notes.filter(n=>isProjectNote(n)&&isArchived(n));
+  // 추가: 제목 적고 + 프로젝트
+  const inp=el('input',{type:'text',placeholder:'새 프로젝트 이름',autocomplete:'off','aria-label':'프로젝트 추가',enterkeyhint:'done'});
+  const add=async()=>{const t=inp.value.trim();if(!t)return;if(projectNote(t)){toast('같은 이름의 프로젝트가 있습니다');return;}inp.value='';const n=await createNote({type:'project',title:t,tpl:'Project'});if(n)openNote(n);};
+  m.append(el('form',{class:'tdadd padd',onsubmit:e=>{e.preventDefault();add();}},inp,el('button',{type:'submit',class:'addbtn'},'+ 프로젝트')));
+  m.append(labelBar(all,()=>projLabel,v=>{projLabel=v;}));
+  const v=all.filter(n=>(!projLabel||(projLabel==='__none'?!labelsOf(n).length:labelsOf(n).includes(projLabel)))&&(!q||(n.title+n.body).toLowerCase().includes(q)))
+    .sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1);
+  if(!all.length)m.append(el('div',{class:'status'},'프로젝트가 없습니다. 위에 이름을 적어 만들어 보세요. 할 일 카드의 "프로젝트로 키우기"로도 만들 수 있습니다.'));
+  else{const wrap=el('div',{class:'pboard'});renderBoard(v,wrap,'status');m.append(wrap);}
+  // 끝낸 프로젝트 (보관된 것)
+  const av=arch.filter(n=>!q||n.title.toLowerCase().includes(q)).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1);
+  if(av.length){const sec=el('section',{class:'tdsec','data-sec':'parch',style:'margin-top:18px;max-width:820px'});
+    sec.append(el('button',{class:'hd','aria-expanded':String(projArchOpen),onclick:()=>{projArchOpen=!projArchOpen;render();}},el('span',{class:'tri'},projArchOpen?'▾':'▸'),'끝낸 프로젝트',el('small',{},String(av.length)+' · 열어서 되살릴 수 있습니다')));
+    if(projArchOpen)for(const n of av)sec.append(el('div',{class:'trow'},el('button',{class:'tx',style:'text-align:left',onclick:()=>openNote(n)},n.title),el('span',{class:'evnote'},String(val(n,'updated')))));
+    m.append(sec);}
+}
+function renderBoard(v,m,g0){
+  const g=g0||(['label','project'].includes(state.group)?state.group:'project');const canDrag=true;
   const keysOf=n=>g==='project'?[projectOf(n)]:g==='type'?[typeOf(n)]:g==='label'?(labelsOf(n).length?labelsOf(n):['']):[n.fm[g]||''];
   let keys;
   if(g==='status')keys=['',...config.statuses.map(s=>s.id)];
@@ -1100,7 +1126,7 @@ function renderBoard(v,m){
         ondragstart:e=>{e.dataTransfer.setData('text/plain',n.path);dragSrcKey=k;dropPos=null;c.classList.add('dragging');},ondragend:()=>c.classList.remove('dragging'),
         ondragover:e=>{e.preventDefault();e.stopPropagation();col.classList.add('over');const r=c.getBoundingClientRect();const top=e.clientY<r.top+r.height/2;col.querySelectorAll('.card').forEach(x=>x.classList.remove('over-top','over-bottom'));c.classList.add(top?'over-top':'over-bottom');
           const i=list.indexOf(n);dropPos={key:k,before:top?n:(list[i+1]||null)};}},
-        el('div',{class:'ct'+(n.fm.status==='done'&&typeOf(n)==='todo'?' isdone':'')},n.title),el('div',{class:'cm'},metaOf(n,g),g!=='label'?labelTag(n):'',g!=='status'?statusTag(n):'',dueEl(n),progEl(n)));
+        el('div',{class:'ct'+(n.fm.status==='done'&&typeOf(n)==='todo'?' isdone':'')},n.title),el('div',{class:'cm'},metaOf(n,g),g!=='label'?labelTag(n):'',g!=='status'?statusTag(n):'',dueEl(n),progEl(n),typeOf(n)==='project'?projStat(n):''));
       col.append(c);
     }
     board.append(col);
@@ -1243,6 +1269,11 @@ function renderTodo(m){
   section('nodate','나중에 (날짜 없음)',nodate,{showDue:false},true);
   section('done','완료',doneL,{showDue:false,done:true},true,'주간 정리 때 보관');
   if(!open.length&&!doneL.length)main.append(el('div',{class:'status'},'할 일이 없습니다. 위 입력창에 적으면 할 일 노트가 생깁니다.'));
+  {const av=notes.filter(n=>typeOf(n)==='todo'&&isArchived(n)&&(todoFolder==='*'||projectOf(n)===todoFolder)&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1);
+    if(av.length){const isOpen=!!todoOpen.arch;const sec=el('section',{class:'tdsec','data-sec':'arch'});
+      sec.append(el('button',{class:'hd','aria-expanded':String(isOpen),onclick:()=>{todoOpen.arch=!todoOpen.arch;localStorage.setItem('brain.todoOpen',JSON.stringify(todoOpen));render();}},el('span',{class:'tri'},isOpen?'▾':'▸'),'보관된 할 일',el('small',{},String(av.length)+' · 열어서 되살릴 수 있습니다')));
+      if(isOpen)for(const n of av.slice(0,100))sec.append(el('div',{class:'trow'},el('button',{class:'tx',style:'text-align:left',onclick:()=>openNote(n)},n.title),el('span',{class:'evnote'},String(val(n,'updated')))));
+      main.append(sec);}}
   const doneAll=doneL.map(t=>t.note);if(doneAll.length&&todoOpen.done)main.append(el('div',{style:'padding-top:8px'},el('button',{class:'btn sm',onclick:()=>archiveDoneTodos(doneAll)},`지금 보관 (${doneAll.length})`)));
   syncBox();
 
@@ -1487,7 +1518,7 @@ async function syncFolders(){
   if(k)toast(`폴더를 속성에 맞췄습니다 · ${k}개`,3000);
 }
 async function archiveNote(n){
-  if(!await okAsk('보관할까요?',`"${n.title}" — 목록에서 빠지고 보관함으로 갑니다. 보관함 보기에서 되살릴 수 있습니다.`,'보관'))return;
+  if(!await okAsk('보관할까요?',`"${n.title}" — 목록에서 빠집니다. ${typeOf(n)==='todo'?'할 일 탭 아래 "보관된 할 일"':'노트 탭의 보관함'}에서 되살릴 수 있습니다.`,'보관'))return;
   await saveNote(n,{archived:true},undefined,undefined,true);toast('보관했습니다');
 }
 async function unarchive(n){
@@ -1858,7 +1889,7 @@ $('#sSave').onclick=async()=>{
 let palItems=[],palIdx=0,palPick=null;
 function palCommands(){
   const c=[{k:'새로',n:'빠른 메모',run:async()=>{if(!['table','board','gallery'].includes(state.view))await switchView(lastNotesView);if($('#quick').style.display==='none')await applyView(BUILTIN_VIEWS[0]);$('#quickText').focus();}},{k:'새로',n:'노트',run:()=>newNote('note')},{k:'새로',n:'할 일',run:()=>newNote('todo')},{k:'새로',n:'프로젝트',run:()=>newNote('project')}];
-  for(const[v,name]of[['docs','문서'],['table','노트 · 표'],['board','노트 · 보드'],['gallery','노트 · 갤러리'],['todo','할 일'],['calendar','일정']])c.push({k:'탭',n:name,run:()=>switchView(v)});
+  for(const[v,name]of[['docs','문서'],['table','노트 · 표'],['board','노트 · 보드'],['gallery','노트 · 갤러리'],['projects','프로젝트'],['todo','할 일'],['calendar','일정']])c.push({k:'탭',n:name,run:()=>switchView(v)});
   for(const sv of BUILTIN_VIEWS)c.push({k:'보기',n:sv.name,run:()=>applyView(sv)});
   if(gcal.on()){c.push({k:'일정',n:'새 일정',run:()=>newEvent(today())},{k:'일정',n:'일정 검색…',run:async()=>{const q=await ask('일정 검색',{placeholder:'제목·장소 단어'});if(q){await switchView('calendar');searchEvents(q);}}});}
   if(current){const n=current;for(const[t,fn]of noteActions(n))c.push({k:'이 노트',n:t,run:fn});}

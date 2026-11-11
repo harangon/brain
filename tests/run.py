@@ -7,9 +7,12 @@ results=[]
 def files(pg):return pg.evaluate('Object.keys(__FILES)')
 def fget(pg,p):return pg.evaluate('p=>__FILES[p]',p)
 def idle(pg,ms=350):pg.wait_for_timeout(ms)
-VIEW_ID={'정리 전':'b:inbox','노트':'b:all','프로젝트':'b:projects','보관함':'b:archive'}
-def view(pg,name):pg.click(f'#views button[data-id="{VIEW_ID[name]}"]');idle(pg)
-def tab(pg,name):pg.click(f'.tabs:not(.sub) button:has-text("{name}")');idle(pg)
+VIEW_ID={'정리 전':'b:inbox','노트':'b:all','보관함':'b:archive'}
+def view(pg,name):
+    if name=='프로젝트':return tab(pg,'프로젝트')
+    if not pg.is_visible('#views'):tab(pg,'노트')
+    pg.click(f'#views button[data-id="{VIEW_ID[name]}"]');idle(pg)
+def tab(pg,name):pg.click(f'.tabs:not(.sub) button:text-is("{name}")');idle(pg)
 def side(pg,k,v):pg.click(f'.nside button[data-k="{k}"][data-v="{v}"]');idle(pg)
 def rows(pg):return pg.eval_on_selector_all('#main tbody tr td.t>button:first-child','e=>e.map(x=>x.textContent)')
 def open_row(pg,title):pg.click(f'#main td.t>button:first-child:text-is("{title}")');idle(pg)
@@ -65,7 +68,8 @@ def t_views(pg):
     side(pg,'project','');side(pg,'label','read');assert set(rows(pg))=={'수납장 문서 요약','옛 자료'},rows(pg)
     side(pg,'label','idea');assert rows(pg)==[] and '해당하는 노트가 없습니다' in pg.inner_text('#main') and pg.locator('.nside').count()==1
     side(pg,'label','');assert '종류' not in pg.inner_text('#main thead')
-    view(pg,'프로젝트');assert not pg.is_visible('#quick'),'프로젝트 보기에는 메모 입력이 없어야 함'
+    view(pg,'프로젝트');assert not pg.is_visible('#quick') and not pg.is_visible('#views') and not pg.is_visible('#subtabs'),'프로젝트 탭에는 메모 입력·보기 칩이 없어야 함'
+    assert '할 일 1/4' in pg.inner_text('.board .card:has-text("집 정리")') and '끝낸 프로젝트' in pg.inner_text('#main')
     cols=pg.eval_on_selector_all('.board .col h3','e=>e.map(x=>x.textContent)');assert any('진행' in c for c in cols) and any('보류' in c for c in cols),cols
     # 프로젝트 보기의 라벨 칩
     assert '업무' in pg.inner_text('.lchips');pg.click('.lchips button[data-v="work"]');idle(pg);cards=pg.eval_on_selector_all('.board .card .ct','e=>e.map(x=>x.textContent)')
@@ -78,11 +82,15 @@ def t_views(pg):
     pg.click('#subtabs button:has-text("갤러리")');idle(pg);assert pg.locator('.gcard').count()>3
     pg.click('#subtabs button:has-text("표")');idle(pg)
 def t_archive_view(pg):
-    view(pg,'보관함');assert set(rows(pg))=={'끝난 일','옛 프로젝트'},rows(pg)
-    assert not pg.is_visible('#quick')
-    open_row(pg,'끝난 일');assert '보관됨' in pg.inner_text('#pPath');act(pg,'되살리기');idle(pg,500)
+    # 보관은 탭마다: 노트 탭 보관함 = 보관한 노트, 할 일 탭 = 보관된 할 일, 프로젝트 탭 = 끝낸 프로젝트
+    view(pg,'보관함');assert set(rows(pg))=={'옛 노트'},rows(pg)
+    assert not pg.is_visible('#quick') and '읽을 것' in pg.inner_text('.lchips')
+    open_row(pg,'옛 노트');act(pg,'되살리기');idle(pg,500);assert '20_Notes/옛 노트.md' in files(pg) and 'archived' not in fget(pg,'20_Notes/옛 노트.md');close(pg)
+    tab(pg,'할 일');pg.click('[data-sec=arch] .hd');idle(pg);pg.click('[data-sec=arch] .trow button:text-is("끝난 일")');idle(pg)
+    assert '보관됨' in pg.inner_text('#pPath');act(pg,'되살리기');idle(pg,500)
     c=fget(pg,'11_Todos/끝난 일.md');assert c and 'archived' not in c and 'label' not in c and 'type: todo' in c,c
     assert '90_Archive/끝난 일.md' not in files(pg);close(pg)
+    tab(pg,'프로젝트');pg.click('[data-sec=parch] .hd');idle(pg);assert '옛 프로젝트' in pg.inner_text('[data-sec=parch]');pg.click('[data-sec=parch] .hd');idle(pg);tab(pg,'노트')
 def t_todo(pg):
     tab(pg,'할 일');side=pg.inner_text('.tdside')
     assert '프로젝트 없음' in side and '집 정리' in side and '1/4' in side,side
@@ -155,6 +163,8 @@ def t_project_restore(pg):
 def t_delete_project(pg):
     view(pg,'프로젝트');pg.click('.board .card:has-text("블로그 새단장")');idle(pg);pg.click('#card .actions .danger');assert '프로젝트 없음' in pg.inner_text('#askMsg');ok(pg);idle(pg,600)
     assert '10_Projects/블로그 새단장.md' not in files(pg) and 'project' not in fget(pg,'11_Todos/도메인 연장.md')
+    pg.fill('.padd input','새 프로젝트');pg.press('.padd input','Enter');idle(pg,700);c=fget(pg,'10_Projects/새 프로젝트.md');assert c and 'type: project' in c and 'status: active' in c,c
+    assert pg.inner_text('#pPath').startswith('프로젝트');close(pg);assert '새 프로젝트' in pg.inner_text('.board')
 def t_misc(pg):
     tab(pg,'일정');assert pg.locator('.calgrid .day').count()==42
     pg.fill('.evbar input[type=search]','치과');pg.press('.evbar input[type=search]','Enter');idle(pg);assert '검색 결과 · 1건' in pg.inner_text('#main')

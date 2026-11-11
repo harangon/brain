@@ -23,6 +23,7 @@ const __FILES={
   '20_Notes/테마 비교 메모.md':__fm({type:'note',project:'"[[블로그 개편]]"',created:__D(-6),updated:__D(-6)},'# 테마 비교 메모\n\n[[수납 아이디어]]\n'),
   '00_Inbox/옛 메모.md':__fm({type:'inbox',created:__D(-7)},'옛 구조에서 온 메모\n'),
   '30_Resources/옛 자료.md':__fm({type:'resource',status:'active',label:'read',created:__D(-7),updated:__D(-7)},'# 옛 자료\n'),
+  '90_Archive/옛 노트.md':__fm({type:'note',label:'read',archived:'true',created:__D(-40),updated:__D(-35)},'# 옛 노트\n'),
   '90_Archive/끝난 일.md':__fm({type:'todo',label:'todo',status:'archived',created:__D(-30),updated:__D(-20)},'# 끝난 일\n'),
   '90_Archive/옛 프로젝트.md':__fm({type:'project',status:'done',archived:'true',created:__D(-60),updated:__D(-30)},'# 옛 프로젝트\n'),
 };
