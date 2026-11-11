@@ -433,7 +433,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   </div>
   <div class="views" id="views"></div>
   <form class="quick" id="quick">
-    <input id="quickText" placeholder="메모 적고 Enter — 정리 안 된 노트로 저장" autocomplete="off">
+    <input id="quickText" placeholder="메모 입력 — 정리 안 된 노트로 저장" enterkeyhint="done" autocomplete="off">
     <button type="submit" id="quickBtn">추가</button>
   </form>
 </header>
@@ -1240,8 +1240,8 @@ function renderCalendar(m){
   wrap.append(el('div',{class:'calh'},el('button',{class:'btn sm',onclick:()=>shift(-1)},'‹'),title,el('button',{class:'btn sm',onclick:()=>shift(1)},'›'),el('button',{class:'btn sm',onclick:()=>{calMonth=today().slice(0,7);calSel=today();render();}},'오늘')));
   if(gcal.on()){
     const bar=el('div',{class:'evbar'});
-    const si=el('input',{type:'search',placeholder:'Google 일정 검색 (전 기간)',value:gcalQ,'aria-label':'일정 검색',onkeydown:e=>{if(e.key==='Enter'){e.preventDefault();searchEvents(si.value);}}});
-    bar.append(si,el('button',{class:'btn sm',onclick:()=>searchEvents(si.value)},'검색'),el('button',{class:'btn sm primary',onclick:()=>newEvent(calSel)},'+ 일정'),
+    const si=el('input',{type:'search',placeholder:'Google 일정 검색 (전 기간)',value:gcalQ,'aria-label':'일정 검색',enterkeyhint:'search'});
+    bar.append(el('form',{style:'display:contents',onsubmit:e=>{e.preventDefault();searchEvents(si.value);}},si,el('button',{type:'submit',class:'btn sm'},'검색')),el('button',{class:'btn sm primary',onclick:()=>newEvent(calSel)},'+ 일정'),
       el('button',{class:'btn sm',title:'Google에서 다시 받기',onclick:()=>{gcal.invalidate();gcalShown.ym='';render();}},'↻'));
     if(gcalShown.ym===calMonth&&gcalShown.offline)bar.append(el('span',{class:'evnote'},`오프라인 · ${gcalShown.at?new Date(gcalShown.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+' 기준':'일정 없음'}${gcalShown.err?' · '+gcalShown.err:''}`));
     else if(gcalShown.ym!==calMonth)bar.append(el('span',{class:'evnote'},'일정 불러오는 중…'));
@@ -1569,9 +1569,10 @@ function renderCard(n){
   const box=$('#card');box.innerHTML='';const{groups,desc}=splitBody(n.body);
   const ty=typeOf(n),arch=isArchived(n);
   // 제목 (할 일은 앞에 완료 체크)
-  const ti=el('input',{class:'ctitle',value:n.title,'aria-label':'제목',onkeydown:e=>{if(e.key==='Enter'){e.preventDefault();ti.blur();}},onblur:async()=>{const t=ti.value.trim();if(t&&t!==n.title){if(ty==='project'&&projectNote(t)){toast('같은 이름의 프로젝트가 있습니다');ti.value=n.title;return;}await saveNote(n,{},t,undefined,true);}else ti.value=n.title;}});
-  if(ty==='todo')box.append(el('div',{class:'ctrow'},el('input',{type:'checkbox',class:'cdone',checked:n.fm.status==='done'?'':null,'aria-label':'완료',title:'완료',onchange:e=>saveNote(n,{status:e.target.checked?'done':''},undefined,undefined,true)}),ti));
-  else box.append(ti);
+  const ti=el('input',{class:'ctitle',value:n.title,'aria-label':'제목',enterkeyhint:'done',onkeydown:e=>{if(e.key==='Enter'){e.preventDefault();ti.blur();}},onblur:async()=>{const t=ti.value.trim();if(t&&t!==n.title){if(ty==='project'&&projectNote(t)){toast('같은 이름의 프로젝트가 있습니다');ti.value=n.title;return;}await saveNote(n,{},t,undefined,true);}else ti.value=n.title;}});
+  const tf=el('form',{style:'display:contents',onsubmit:e=>{e.preventDefault();ti.blur();}},ti);   // 폰 키보드의 완료 키 → 저장
+  if(ty==='todo')box.append(el('div',{class:'ctrow'},el('input',{type:'checkbox',class:'cdone',checked:n.fm.status==='done'?'':null,'aria-label':'완료',title:'완료',onchange:e=>saveNote(n,{status:e.target.checked?'done':''},undefined,undefined,true)}),tf));
+  else box.append(tf);
   // 칩 줄: 종류에 따라 — 프로젝트는 상태·마감·라벨, 할 일은 프로젝트·마감·라벨, 노트는 프로젝트·라벨
   const chips=el('div',{class:'chiprow'});
   if(ty==='project'){const st=statusOpt(n.fm.status);const stChip=el('span',{class:'chip'+(n.fm.status?' set':''),title:'상태'},n.fm.status?(st?tagEl(st):n.fm.status):'+ 상태');
