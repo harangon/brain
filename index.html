@@ -363,7 +363,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
 .daylist h3{font-size:13px;font-weight:500;color:var(--fg2);margin:0 0 6px}
 @media (max-width:640px){.day{min-height:52px;padding:3px}.day .it{display:none}.day .dots{display:flex;gap:2px;flex-wrap:wrap}.day .dots i{width:5px;height:5px;border-radius:50%;background:var(--accent);display:block}}
 @media (min-width:641px){.day .dots{display:none}}
-/* 문서 뷰 */
+/* 문서 탭 */
 .docs{display:flex;gap:0;min-height:calc(100vh - 150px);border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .tree{flex:0 0 260px;border-right:1px solid var(--line);background:var(--bg2);overflow:auto;padding:6px 0}
 .tree h4{margin:8px 10px 2px;font-size:11.5px;font-weight:500;color:var(--fg3);display:flex;justify-content:space-between;align-items:center}
@@ -495,8 +495,8 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   <div class="box">
     <div class="mh" role="tablist">
       <button role="tab" data-tab="conn" aria-selected="true">연결</button>
-      <button role="tab" data-tab="props">속성</button>
-      <button role="tab" data-tab="views">저장된 뷰</button>
+      <button role="tab" data-tab="props">상태 · 라벨 · 속성</button>
+      <button role="tab" data-tab="views">저장한 보기</button>
     </div>
     <div class="mb" data-tab="conn">
       <h2>연결 설정</h2>
@@ -512,22 +512,23 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
       <div id="sGcalCals" style="margin-top:6px"></div>
     </div>
     <div class="mb" data-tab="props" hidden>
-      <h2>상태</h2>
-      <p>id는 프론트매터에 저장되는 값(영문), 이름은 화면 표시용. 순서가 보드 열 순서입니다.</p>
+      <h2>프로젝트 상태</h2>
+      <p>프로젝트의 진행 단계입니다. 순서가 프로젝트 보드의 열 순서입니다. id는 파일에 저장되는 값(영문), 이름은 화면 표시용입니다. 진행(active)과 완료(done)는 앱이 쓰는 값이라 지울 수 없고, 이름과 색만 바꿀 수 있습니다. 할 일의 완료도 done 을 씁니다.</p>
       <div class="optlist" id="optStatus"></div>
       <button class="btn sm" id="addStatus">+ 상태 추가</button>
       <h2 style="margin-top:18px">라벨</h2>
+      <p>노트·할 일·프로젝트에 붙이는 분류입니다. 여러 개 붙일 수 있습니다. 내 생각(mine)과 목차(moc)는 AI 정리 명령이 구분해서 다루는 라벨입니다.</p>
       <div class="optlist" id="optLabel"></div>
       <button class="btn sm" id="addLabel">+ 라벨 추가</button>
       <h2 style="margin-top:18px">사용자 속성</h2>
-      <p>프론트매터에 추가로 저장할 속성. 종류: 텍스트·숫자·날짜·선택·체크. 선택은 옵션을 쉼표로.</p>
+      <p>노트에 더 적고 싶은 항목을 직접 만듭니다(예: 장소, 우선순위). 표의 칸과 카드의 칩으로 나옵니다. 종류: 텍스트·숫자·날짜·선택·체크. 선택은 옵션을 쉼표로 적습니다.</p>
       <div class="optlist" id="optProps"></div>
       <button class="btn sm" id="addProp">+ 속성 추가</button>
-      <p style="margin-top:14px">저장하면 볼트의 <code>_scripts/brain.config.json</code>에 커밋됩니다. Claude Code의 CLAUDE.md도 이 파일을 참조합니다.</p>
+      <p style="margin-top:14px">저장하면 볼트의 <code>_scripts/brain.config.json</code>에 기록되어 모든 기기에 적용됩니다.</p>
     </div>
     <div class="mb" data-tab="views" hidden>
-      <h2>저장된 뷰</h2>
-      <p>뷰 종류·폴더·상태·라벨·그룹·정렬·검색어 조합을 이름으로 저장한 것입니다. 상단 뷰 줄에서 "현재 뷰 저장"으로 추가합니다.</p>
+      <h2>저장한 보기</h2>
+      <p>노트 탭에서 필터(종류·프로젝트·상태·라벨)·검색어·정렬·표/보드/갤러리 조합을 이름으로 저장한 것입니다. 노트 탭의 "+ 현재 보기 저장"으로 추가하고, 여기서 이름을 바꾸거나 지웁니다. 기본 보기(정리 전 · 노트 · 프로젝트 · 보관함)는 항상 있습니다.</p>
       <div class="optlist" id="optViews"></div>
     </div>
     <div class="row"><button class="btn" id="sCancel">닫기</button><button class="btn primary" id="sSave">저장</button></div>
@@ -1316,7 +1317,7 @@ function renderCalendar(m){
   wrap.append(dl);m.append(wrap);
 }
 
-/* ===================== 문서 뷰 ===================== */
+/* ===================== 문서 탭 ===================== */
 let docsEl=null;
 function renderDocs(m){
   const q=state.q.trim().toLowerCase();
@@ -1335,7 +1336,7 @@ function renderDocs(m){
 }
 function dockPanel(editor){const p=$('#panel');p.classList.add('docked');editor.append(p);if(current){p.classList.add('open');p.setAttribute('aria-hidden','false');}$('#dim').classList.remove('on');}
 function undockPanel(){const p=$('#panel');if(!p.classList.contains('docked'))return;p.classList.remove('docked','open');p.setAttribute('aria-hidden','true');document.body.append(p);docsEl=null;current=null;}
-/* 뷰 전환: 문서 탭의 편집기에 저장 안 한 내용이 있으면 먼저 묻는다 */
+/* 탭 전환: 문서 탭의 편집기에 저장 안 한 내용이 있으면 먼저 묻는다 */
 async function switchView(v,extra){if(state.view==='docs'&&v!=='docs'&&current&&!await guardDirty())return;if(extra)extra();state.view=v;render();}
 
 async function completeTodo(n,lineIdx){
@@ -1792,25 +1793,33 @@ function insertLink(ta){
 $('#pLink').onclick=()=>insertLink($('#pBody'));
 
 /* ===================== 설정 모달 ===================== */
-function optRow(list,o,listEl){
+function optRow(list,o,listEl,core=[]){
+  const lock=core.includes(o.id);
   const row=el('div',{class:'opt'},
-    el('input',{class:'id',value:o.id,placeholder:'id',oninput:e=>o.id=e.target.value.trim().replace(/[^a-z0-9_-]/gi,'')}),
+    el('input',{class:'id',value:o.id,placeholder:'id',disabled:lock?'':null,title:lock?'앱이 쓰는 값이라 바꿀 수 없습니다':'',oninput:e=>o.id=e.target.value.trim().replace(/[^a-z0-9_-]/gi,'')}),
     el('input',{value:o.name,placeholder:'이름',oninput:e=>o.name=e.target.value}),
     (()=>{const s=el('select',{onchange:e=>o.color=e.target.value});for(const c of COLORS)s.append(el('option',{value:c,class:'c-'+c},c));s.value=o.color||'gray';return s;})(),
-    el('button',{class:'x','aria-label':'삭제',onclick:()=>{list.splice(list.indexOf(o),1);row.remove();}},'✕'));
+    lock?el('span',{class:'x',style:'visibility:hidden'},'✕'):el('button',{class:'x','aria-label':'삭제',onclick:()=>{list.splice(list.indexOf(o),1);row.remove();}},'✕'));
   listEl.append(row);
 }
+const CORE_STATUS=['active','done'];
 let draft=null;
 function openSettings(tab='conn'){
   draft=structuredClone(config);
   $('#sRepo').value=cfg.repo;$('#sBranch').value=cfg.branch;$('#sToken').value=cfg.token;$('#sGcalUrl').value=cfg.gcal.url||'';$('#sGcalKey').value=cfg.gcal.key||'';$('#sGcalMsg').textContent='';renderGcalCals(cfg.gcal.cals||[],Object.entries(cfg.gcal.names||{}).map(([id,name])=>({id,name})));
-  const st=$('#optStatus');st.innerHTML='';for(const o of draft.statuses)optRow(draft.statuses,o,st);
+  const st=$('#optStatus');st.innerHTML='';for(const o of draft.statuses)optRow(draft.statuses,o,st,CORE_STATUS);
   const lb=$('#optLabel');lb.innerHTML='';for(const o of draft.labels)optRow(draft.labels,o,lb);
   draft.props=draft.props||[];const pp=$('#optProps');pp.innerHTML='';for(const o of draft.props)propRow(draft.props,o,pp);
   const vw=$('#optViews');vw.innerHTML='';
-  for(const v of draft.views){const row=el('div',{class:'opt'},el('input',{value:v.name,oninput:e=>v.name=e.target.value}),el('span',{style:'font-size:12px;color:var(--fg2);flex:0 0 auto'},`${v.view}${v.type?' · '+TYPE_NAME[v.type]:''}`),el('button',{class:'x',onclick:()=>{draft.views.splice(draft.views.indexOf(v),1);row.remove();}},'✕'));vw.append(row);}
-  if(!draft.views.length)vw.append(el('p',{},'저장된 보기가 없습니다. 기본 보기(정리 전 · 노트 · 프로젝트 · 보관함)는 항상 있습니다.'));
+  for(const v of draft.views){const row=el('div',{class:'opt'},el('input',{value:v.name,oninput:e=>v.name=e.target.value}),el('span',{style:'font-size:12px;color:var(--fg2);flex:1 1 50%;min-width:0'},viewSummary(v)),el('button',{class:'x',onclick:()=>{draft.views.splice(draft.views.indexOf(v),1);row.remove();}},'✕'));vw.append(row);}
+  if(!draft.views.length)vw.append(el('p',{},'저장한 보기가 없습니다.'));
   settingsTab(tab);$('#settings').classList.add('on');
+}
+function viewSummary(v){
+  const p=[({table:'표',board:'보드',gallery:'갤러리'})[v.view]||'표'];
+  if(v.inbox)p.push('정리 전');if(v.arch)p.push('보관함');
+  for(const[k,name,fmt]of FILTER_KEYS)if(v[k])p.push(k==='type'?fmt(v[k]):`${name}: ${fmt(v[k])}`);
+  if(v.q)p.push(`검색 “${v.q}”`);return p.join(' · ');
 }
 function settingsTab(t){document.querySelectorAll('#settings .mh button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));document.querySelectorAll('#settings .mb').forEach(p=>p.hidden=p.dataset.tab!==t);}
 document.querySelectorAll('#settings .mh button').forEach(b=>b.onclick=()=>settingsTab(b.dataset.tab));
@@ -1851,7 +1860,7 @@ $('#sSave').onclick=async()=>{
   if(JSON.stringify(ncfg.gcal)!==JSON.stringify(cfg.gcal)){gcal.cache={};gcal.save();gcalShown.ym='';}
   const connChanged=JSON.stringify({...ncfg,gcal:0})!==JSON.stringify({...cfg,gcal:0});
   cfg=ncfg;localStorage.setItem(LS,JSON.stringify(cfg));
-  draft.statuses=draft.statuses.filter(o=>o.id&&o.name);draft.labels=draft.labels.filter(o=>o.id&&o.name);draft.props=(draft.props||[]).filter(o=>o.id&&o.name&&!RESERVED.has(o.id));
+  draft.statuses=draft.statuses.filter(o=>o.id&&o.name);for(const id of CORE_STATUS)if(!draft.statuses.some(o=>o.id===id))draft.statuses.push(DEFAULT_CONFIG.statuses.find(o=>o.id===id));draft.labels=draft.labels.filter(o=>o.id&&o.name);draft.props=(draft.props||[]).filter(o=>o.id&&o.name&&!RESERVED.has(o.id));
   const propsChanged=JSON.stringify(draft)!==JSON.stringify(config);
   $('#settings').classList.remove('on');
   if(connChanged){localStorage.removeItem('brain.cache');config=draft;await load();if(propsChanged)try{await saveConfig();}catch(e){toast('설정 저장 실패: '+e.message,4000);}return;}
@@ -1862,7 +1871,7 @@ $('#sSave').onclick=async()=>{
 let palItems=[],palIdx=0,palPick=null;
 function palCommands(){
   const c=[{k:'새로',n:'빠른 메모',run:async()=>{if(!['table','board','gallery'].includes(state.view))await switchView(lastNotesView);if($('#quick').style.display==='none')await applyView(BUILTIN_VIEWS[0]);$('#quickText').focus();}},{k:'새로',n:'노트',run:()=>newNote('note')},{k:'새로',n:'할 일',run:()=>newNote('todo')},{k:'새로',n:'프로젝트',run:()=>newNote('project')}];
-  for(const[v,name]of[['docs','문서'],['table','노트 · 표'],['board','노트 · 보드'],['gallery','노트 · 갤러리'],['todo','할 일'],['calendar','일정']])c.push({k:'뷰',n:name,run:()=>switchView(v)});
+  for(const[v,name]of[['docs','문서'],['table','노트 · 표'],['board','노트 · 보드'],['gallery','노트 · 갤러리'],['todo','할 일'],['calendar','일정']])c.push({k:'탭',n:name,run:()=>switchView(v)});
   for(const sv of [...BUILTIN_VIEWS,...config.views])c.push({k:'보기',n:sv.name,run:()=>applyView(sv)});
   if(gcal.on()){c.push({k:'일정',n:'새 일정',run:()=>newEvent(today())},{k:'일정',n:'일정 검색…',run:async()=>{const q=await ask('일정 검색',{placeholder:'제목·장소 단어'});if(q){await switchView('calendar');searchEvents(q);}}});}
   if(current){const n=current;for(const[t,fn]of noteActions(n))c.push({k:'이 노트',n:t,run:fn});}

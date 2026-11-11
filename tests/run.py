@@ -183,6 +183,15 @@ def t_links(pg):
     pg.click('#card .dedit button:text-is("링크")');idle(pg,200);pg.fill('#palInput','옛 메모');idle(pg,200);pg.click('#palList button >> nth=0');idle(pg,200)
     assert pg.input_value(ta).endswith('[[수납 아이디어]][[옛 메모]]'),pg.input_value(ta)
     pg.click('#card .dedit button:text-is("저장")');idle(pg);assert '[[옛 메모]]' in fget(pg,'20_Notes/수납장 문서 요약.md') and '옛 메모' in pg.inner_text('#card');close(pg)
+def t_settings(pg):
+    tab(pg,'노트');view(pg,'노트');filt(pg);pg.select_option('#fLabel','read');idle(pg)
+    pg.click('#views button.save');pg.fill('#askField input','읽을 것');ok(pg)
+    assert pg.get_attribute('#views button:text-is("읽을 것")','aria-pressed')=='true'
+    pg.click('#btnSettings');idle(pg,200);tabs=pg.inner_text('#settings .mh');assert '저장한 보기' in tabs and '뷰' not in pg.inner_text('#settings')
+    pg.click('#settings .mh button[data-tab=views]');idle(pg,200);assert '표 · 노트 · 라벨: 읽을 것' in pg.inner_text('#optViews'),pg.inner_text('#optViews')
+    pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
+    assert pg.locator('#optStatus .opt').count()==3 and pg.locator('#optStatus .opt button.x').count()==1 and pg.locator('#optStatus input.id[disabled]').count()==2
+    pg.click('#sCancel');idle(pg,200)
 def t_offline(pg):
     tab(pg,'할 일');pg.evaluate('window.__OFFLINE=true');inp='.tdadd input[type=text]'
     pg.fill(inp,'오프라인 할 일');pg.press(inp,'Enter');idle(pg);assert '오프라인 할 일' in pg.inner_text('.tdmain') and '11_Todos/오프라인 할 일.md' not in files(pg)
@@ -198,7 +207,7 @@ def t_unit(pg):
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
-TESTS=[t_unit,t_load,t_suggest,t_keep,t_quick,t_views,t_archive_view,t_todo,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_links,t_offline]
+TESTS=[t_unit,t_load,t_suggest,t_keep,t_quick,t_views,t_archive_view,t_todo,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_links,t_settings,t_offline]
 with sync_playwright() as p:
     b=p.chromium.launch();pg=b.new_page(viewport={'width':1280,'height':860});errs=[]
     pg.on('pageerror',lambda e:errs.append(str(e)));pg.on('console',lambda m:errs.append('console: '+m.text) if m.type=='error' else None)

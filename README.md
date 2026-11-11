@@ -38,7 +38,7 @@
 `gcal.gs`를 Google Apps Script 웹 앱으로 배포(실행 계정: 나, 액세스: 모든 사용자)하고, brain ⚙ → 연결에 웹 앱 URL과 KEY를 넣는다. 일정은 매번 Google에서 직접 읽고 쓰며 저장소에는 남지 않는다. 월 단위 5분 캐시, 오프라인이면 마지막 캐시를 "기준 시각"과 함께 표시. KEY는 브라우저에만 저장되고 요청 본문(POST)으로만 보낸다.
 
 ## 설정 파일
-`drbrain/_scripts/brain.config.json` — `statuses`, `labels`, `props`(사용자 속성: id/name/type[text|number|date|select|checkbox]/options), `views`. ⚙ → 속성에서 편집하면 커밋됨. 볼트의 `CLAUDE.md`가 이 파일을 참조.
+`drbrain/_scripts/brain.config.json` — `statuses`, `labels`, `props`(사용자 속성: id/name/type[text|number|date|select|checkbox]/options), `views`(저장한 보기). ⚙ → 상태 · 라벨 · 속성에서 편집하면 커밋됨. 볼트의 `CLAUDE.md`가 이 파일을 참조.
 
 ## 프론트매터 규약
 - `label`: 하나면 `label: work`, 여럿이면 `label: [read, work]`
