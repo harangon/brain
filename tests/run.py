@@ -181,6 +181,9 @@ with sync_playwright() as p:
         assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰에서 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'09-mobile-inbox.png'))
         tab(m,'할 일');assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 할 일 탭 가로 스크롤'
+        m.fill('.tdadd input[type=text]','폰에서 추가');m.click('.tdadd .addbtn');idle(m);assert '11_Todos/폰에서 추가.md' in files(m),'추가 버튼으로 할 일이 안 만들어짐'
+        m.fill('.tdadd input[type=text]','폰 엔터');m.press('.tdadd input[type=text]','Enter');idle(m);assert '11_Todos/폰 엔터.md' in files(m)
+        assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'추가 뒤 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'10-mobile-todo.png'))
         results.append(('mobile','ok',''))
     except Exception as e:results.append(('mobile','FAIL',str(e)[:300]))

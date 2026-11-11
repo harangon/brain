@@ -142,7 +142,7 @@ td input.inl{width:118px}
 .tdadd{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .tdadd input[type=text]{flex:1;min-width:220px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);font-size:14px}
 .tdadd input[type=text]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent);background:var(--bg)}
-.tdadd{padding:2px}
+.tdadd{padding:2px;margin:0}
 .tdadd .chips{gap:4px}
 .tdadd .chip{padding:4px 10px;border-radius:14px;border:1px solid var(--line);font-size:12.5px;color:var(--fg2);background:var(--bg)}
 .tdadd .chip[aria-pressed=true]{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--bg))}
@@ -244,7 +244,8 @@ td input.inl{width:118px}
 .card-v .ci .t{flex:1}
 .card-v .ci .due{font-size:11.5px;color:var(--fg2);white-space:nowrap;padding-top:2px}
 .card-v .ci .x{opacity:0;font-size:12px}.card-v .ci:hover .x{opacity:.6}
-.card-v .cl .add input{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg2);font-size:13px;margin-top:4px}
+.card-v .cl .add{display:flex;gap:6px;align-items:center}.card-v .cl .add .btn{margin-top:4px;flex:0 0 auto}
+.card-v .cl .add input{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg2);font-size:13px;margin-top:4px}
 .card-v .att{display:flex;gap:8px;flex-wrap:wrap}
 .card-v .att img{width:96px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
 .card-v .act{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--fg2)}
@@ -1138,7 +1139,7 @@ function renderTodo(m){
 
   // 빠른 추가 → 할 일 노트 (프로젝트는 골라도 되고 안 골라도 된다)
   const box=el('section',{class:'tdtoday'});var boxReady=false;
-  const inp=el('input',{type:'text',placeholder:'할 일 적고 Enter (예: 금요일 보고서, 11/20 치과)',autocomplete:'off','aria-label':'할 일 추가'});
+  const inp=el('input',{type:'text',placeholder:'할 일 입력 (예: 금요일 보고서, 11/20 치과)',autocomplete:'off','aria-label':'할 일 추가'});
   const chips=el('div',{class:'chips',role:'group','aria-label':'날짜'});
   const dateIn=el('input',{type:'date',class:'chipdate','aria-label':'날짜 선택',value:todoDate,onchange:()=>{todoDate=dateIn.value;todoDue=todoDate?'date':'today';paint();inp.focus();}});
   const dueOpts=[['today','오늘',()=>td],['date','날짜…',()=>todoDate||null],['none','나중에',()=>null]];
@@ -1155,8 +1156,8 @@ function renderTodo(m){
   const plist=projectList();if(todoFolder!=='*')todoProject=todoFolder;
   const psel=el('select',{'aria-label':'프로젝트',title:'프로젝트',onchange:()=>{todoProject=psel.value;paint();inp.focus();}});psel.append(el('option',{value:''},'프로젝트 없음'));for(const pn of plist)psel.append(el('option',{value:pn},pn));psel.value=plist.includes(todoProject)?todoProject:'';
   const submit=async()=>{const e=effective();const text=e.rest;if(!text)return;inp.value='';paint();todoRefocus=true;await addTodoNote(text,e.due,false,psel.value);};
-  inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();submit();}};inp.oninput=paint;
-  main.append(el('div',{class:'tdadd'},inp,chips,psel),preview,box);paint();
+  inp.oninput=paint;inp.setAttribute('enterkeyhint','done');
+  main.append(el('form',{class:'tdadd',onsubmit:e=>{e.preventDefault();submit();}},inp,el('button',{type:'submit',class:'btn sm addbtn'},'추가'),chips,psel),preview,box);paint();
   if(todoRefocus){todoRefocus=false;setTimeout(()=>inp.focus(),0);}
 
   const row=(t,{showDue=true,late=false,done=false}={})=>{
@@ -1612,9 +1613,9 @@ function renderCard(n){
     for(const t of tl){const done=t.fm.status==='done';cl.append(el('div',{class:'ci'+(done?' done':'')},
       el('input',{type:'checkbox',checked:done?'':null,'aria-label':'완료',onchange:async e=>{await saveNote(t,{status:e.target.checked?'done':''},undefined,undefined,true);renderCard(n);}}),
       el('button',{class:'t',style:'text-align:left',onclick:()=>openNote(t)},el('span',{class:'t'},t.title)),t.fm.due?el('span',{class:'due',style:!done&&t.fm.due<today()?'color:var(--danger)':''},fmtDue(t.fm.due)):''));}
-    const add=el('input',{placeholder:'+ 할 일 (Enter) — "금요일 보고서"처럼 날짜도 됩니다','aria-label':'할 일 추가',onkeydown:async e=>{if(e.key!=='Enter')return;e.preventDefault();const raw=add.value.trim();if(!raw)return;const w=parseWhen(raw);const text=w?w.rest:raw;if(!text)return;add.value='';
-      if(await addTodoNote(text,w?w.due:null,true,n.title)){render();renderCard(n);setTimeout(()=>$('#card .cl .add input')?.focus(),0);}}});
-    cl.append(el('div',{class:'add'},add));ps.append(cl);box.append(ps);
+    const add=el('input',{placeholder:'+ 할 일 — "금요일 보고서"처럼 날짜도 됩니다','aria-label':'할 일 추가',enterkeyhint:'done'});const addGo=async()=>{const raw=add.value.trim();if(!raw)return;const w=parseWhen(raw);const text=w?w.rest:raw;if(!text)return;add.value='';
+      if(await addTodoNote(text,w?w.due:null,true,n.title)){render();renderCard(n);setTimeout(()=>$('#card .cl .add input')?.focus(),0);}};
+    cl.append(el('form',{class:'add',onsubmit:e=>{e.preventDefault();addGo();}},add,el('button',{type:'submit',class:'btn sm'},'추가')));ps.append(cl);box.append(ps);
     const nl=notesOf(n.title).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1);
     const ns=el('section',{'data-sec':'notes'});ns.append(el('h3',{},'노트',el('span',{class:'evnote'},nl.length?String(nl.length):''),el('span',{class:'sp'})));
     const nb=el('div',{class:'cl'});
@@ -1640,9 +1641,9 @@ function renderCard(n){
         el('span',{class:'t'},it.text.replace(/📅\s*\d{4}-\d{2}-\d{2}/,'').trim()),it.due?el('span',{class:'due'},fmtDue(it.due)):'',
         el('button',{class:'icon x','aria-label':'항목 삭제',onclick:async()=>{const lines=stripH1(n.body).split('\n');lines.splice(it.line,1);await saveNote(n,{},undefined,lines.join('\n'),true);}},'✕'));
       cl.append(ci);}
-    const add=el('input',{placeholder:'+ 항목 (Enter) — "금요일 보고서"처럼 날짜도 됩니다','aria-label':'항목 추가',onkeydown:async e=>{if(e.key!=='Enter')return;e.preventDefault();const raw=add.value.trim();if(!raw)return;const w=parseWhen(raw);const text=w?w.rest:raw;if(!text)return;
-      const lines=stripH1(n.body).split('\n');const last=g.items.length?g.items[g.items.length-1].line:g.headLine;lines.splice(last+1,0,`- [ ] ${text}${w?' 📅 '+w.due:''}`);add.value='';await saveNote(n,{},undefined,lines.join('\n'),true);}});
-    cl.append(el('div',{class:'add'},add));cls.append(cl);
+    const add=el('input',{placeholder:'+ 항목 — "금요일 보고서"처럼 날짜도 됩니다','aria-label':'항목 추가',enterkeyhint:'done'});const addGo=async()=>{const raw=add.value.trim();if(!raw)return;const w=parseWhen(raw);const text=w?w.rest:raw;if(!text)return;
+      const lines=stripH1(n.body).split('\n');const last=g.items.length?g.items[g.items.length-1].line:g.headLine;lines.splice(last+1,0,`- [ ] ${text}${w?' 📅 '+w.due:''}`);add.value='';await saveNote(n,{},undefined,lines.join('\n'),true);};
+    cl.append(el('form',{class:'add',onsubmit:e=>{e.preventDefault();addGo();}},add,el('button',{type:'submit',class:'btn sm'},'추가')));cls.append(cl);
   }
   if(!groups.length)cls.append(el('div',{class:'evnote'},'없습니다. "+ 체크리스트"로 만들거나 설명에 - [ ] 줄을 쓰세요.'));
   box.append(cls);
