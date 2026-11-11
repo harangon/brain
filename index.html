@@ -60,11 +60,10 @@ input.search{padding:5px 9px;border:1px solid var(--line);border-radius:var(--ra
 .views button:hover{background:var(--bg2)}
 .views button[aria-pressed=true]{background:var(--fg);color:var(--bg)}
 .views .save{color:var(--accent);border-color:var(--line)}
-.quick{display:flex;gap:6px;padding:0 12px 10px}
+.quick{display:flex;gap:6px;padding:0 12px 10px;align-items:center}
 .quick input{flex:1;padding:8px 10px;border:1px solid var(--line2);border-radius:var(--radius);background:var(--bg2)}
 .quick input:focus{background:var(--bg);border-color:var(--accent);outline:none}
-.quick button{padding:0 12px;border-radius:var(--radius);background:var(--fg);color:var(--bg);font-weight:500}
-.quick button:disabled{opacity:.4;cursor:default}
+
 
 /* ---------- 본문 ---------- */
 main{padding:0 12px 80px;min-height:60vh}
@@ -304,6 +303,9 @@ td select.inl.pj{max-width:170px}
 .btn.danger{color:var(--danger)}
 .btn.sm{padding:3px 8px;font-size:13px}
 .btn:disabled{opacity:.4;cursor:default}
+/* 각 탭의 주 추가 버튼(+ 메모 · + 할 일 · + 일정)은 모양을 하나로 */
+.addbtn,.btn.addbtn{height:38px;padding:0 14px;border-radius:var(--radius);border:1px solid var(--fg);background:var(--fg);color:var(--bg);font-size:13.5px;font-weight:500;white-space:nowrap;flex:0 0 auto;line-height:1.3}
+.addbtn:disabled{opacity:.4;cursor:default}
 .dim{position:fixed;inset:0;background:rgba(0,0,0,.2);z-index:9;display:none}
 .dim.on{display:block}
 
@@ -448,7 +450,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   <div class="views" id="views"></div>
   <form class="quick" id="quick">
     <input id="quickText" placeholder="메모 입력 — 정리 안 된 노트로 저장" enterkeyhint="done" autocomplete="off">
-    <button type="submit" id="quickBtn">추가</button>
+    <button type="submit" id="quickBtn" class="addbtn">+ 메모</button>
   </form>
 </header>
 
@@ -1201,7 +1203,7 @@ function renderTodo(m){
   const psel=el('select',{'aria-label':'프로젝트',title:'프로젝트',onchange:()=>{todoProject=psel.value;paint();inp.focus();}});psel.append(el('option',{value:''},'프로젝트 없음'));for(const pn of plist)psel.append(el('option',{value:pn},pn));psel.value=plist.includes(todoProject)?todoProject:'';
   const submit=async()=>{const e=effective();const text=e.rest;if(!text)return;inp.value='';paint();todoRefocus=true;await addTodoNote(text,e.due,false,psel.value);};
   inp.oninput=paint;inp.setAttribute('enterkeyhint','done');
-  main.append(el('form',{class:'tdadd',onsubmit:e=>{e.preventDefault();submit();}},inp,el('button',{type:'submit',class:'btn sm addbtn'},'추가'),chips,psel),preview,box);paint();
+  main.append(el('form',{class:'tdadd',onsubmit:e=>{e.preventDefault();submit();}},inp,el('button',{type:'submit',class:'addbtn'},'+ 할 일'),chips,psel),preview,box);paint();
   if(todoRefocus){todoRefocus=false;setTimeout(()=>inp.focus(),0);}
 
   const row=(t,{showDue=true,late=false,done=false}={})=>{
@@ -1285,7 +1287,7 @@ function renderCalendar(m){
   if(gcal.on()){
     const bar=el('div',{class:'evbar'});
     const si=el('input',{type:'search',placeholder:'Google 일정 검색 (전 기간)',value:gcalQ,'aria-label':'일정 검색',enterkeyhint:'search'});
-    bar.append(el('form',{style:'display:contents',onsubmit:e=>{e.preventDefault();searchEvents(si.value);}},si,el('button',{type:'submit',class:'btn sm'},'검색')),el('button',{class:'btn sm primary',onclick:()=>newEvent(calSel)},'+ 일정'),
+    bar.append(el('form',{style:'display:contents',onsubmit:e=>{e.preventDefault();searchEvents(si.value);}},si,el('button',{type:'submit',class:'btn sm'},'검색')),el('button',{class:'addbtn',onclick:()=>newEvent(calSel)},'+ 일정'),
       el('button',{class:'btn sm',title:'Google에서 다시 받기',onclick:()=>{gcal.invalidate();gcalShown.ym='';render();}},'↻'));
     if(gcalShown.ym===calMonth&&gcalShown.offline)bar.append(el('span',{class:'evnote'},`오프라인 · ${gcalShown.at?new Date(gcalShown.at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+' 기준':'일정 없음'}${gcalShown.err?' · '+gcalShown.err:''}`));
     else if(gcalShown.ym!==calMonth)bar.append(el('span',{class:'evnote'},'일정 불러오는 중…'));
@@ -1309,7 +1311,7 @@ function renderCalendar(m){
   for(const ev of selEv)dl.append(evRow(ev,false));
   for(const it of sel)dl.append(el('div',{class:'todo'},el('span',{class:'tag'+(it.st?' c-'+it.st.color:'')},it.kind==='todo'?'할 일':it.kind==='daily'?'데일리':(it.st?it.st.name:'마감')),el('span',{class:'tx'},el('button',{onclick:()=>openNote(it.note)},it.title))));
   if(!sel.length&&!selEv.length)dl.append(el('div',{style:'color:var(--fg3);font-size:13px'},gcal.on()?'이 날짜에 일정·마감·할 일이 없습니다.':'이 날짜에 마감·할 일·데일리 노트가 없습니다.'));
-  dl.append(el('div',{class:'add'},...(gcal.on()?[el('button',{class:'btn sm primary',onclick:()=>newEvent(calSel)},'+ 일정'),' ']:[]),el('button',{class:'btn sm',onclick:()=>addTodoOn(calSel)},'+ 이 날짜 할 일')));
+  dl.append(el('div',{class:'add'},...(gcal.on()?[el('button',{class:'btn sm',onclick:()=>newEvent(calSel)},'+ 이 날짜 일정'),' ']:[]),el('button',{class:'btn sm',onclick:()=>addTodoOn(calSel)},'+ 이 날짜 할 일')));
   wrap.append(dl);m.append(wrap);
 }
 
