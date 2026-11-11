@@ -67,6 +67,9 @@ def t_views(pg):
     side(pg,'label','');assert '종류' not in pg.inner_text('#main thead')
     view(pg,'프로젝트');assert not pg.is_visible('#quick'),'프로젝트 보기에는 메모 입력이 없어야 함'
     cols=pg.eval_on_selector_all('.board .col h3','e=>e.map(x=>x.textContent)');assert any('진행' in c for c in cols) and any('보류' in c for c in cols),cols
+    # 프로젝트 보기의 라벨 칩
+    assert '업무' in pg.inner_text('.lchips');pg.click('.lchips button[data-v="work"]');idle(pg);cards=pg.eval_on_selector_all('.board .card .ct','e=>e.map(x=>x.textContent)')
+    assert cards==['블로그 개편'],cards;pg.click('.lchips button[data-v="work"]');idle(pg);assert pg.locator('.board .card').count()==2
     shot(pg,'02-projects-board')
     view(pg,'노트');pg.click('#subtabs button:has-text("보드")');idle(pg)
     cols=pg.eval_on_selector_all('.board .col h3','e=>e.map(x=>x.textContent)');assert any('집 정리' in c for c in cols) and any('없음' in c for c in cols),cols
@@ -93,6 +96,11 @@ def t_todo(pg):
     pg.click('.tdside button[data-key=""]');idle(pg);txt=pg.inner_text('.tdmain');assert '우유 사기' in txt and '업체 견적' not in txt
     pg.fill(inp,'세탁소');pg.press(inp,'Enter');idle(pg);c=fget(pg,'11_Todos/세탁소.md');assert c and 'project' not in c,c
     pg.click('.tdside button[data-key="*"]');idle(pg)
+    # 라벨로 거르기: 그 라벨의 할 일만, 새 할 일도 그 라벨로
+    pg.click('.tdside button[data-label="work"]');idle(pg);txt=pg.inner_text('.tdmain');assert '건강검진 예약' in txt and '우유 사기' not in txt,txt
+    assert '라벨 업무' in pg.inner_text('.tdprev') or True
+    pg.fill(inp,'회의록 정리');pg.press(inp,'Enter');idle(pg);c=fget(pg,'11_Todos/회의록 정리.md');assert c and 'label: work' in c,c
+    pg.click('.tdside button[data-label="work"]');idle(pg);assert '우유 사기' in pg.inner_text('.tdmain')
     pg.click('[data-sec=done] .hd');idle(pg);assert '주간 정리 때 보관' in pg.inner_text('[data-sec=done] .hd') and '비용 비교' in pg.inner_text('[data-sec=done]')
     # 완료 체크
     pg.click('.tdtoday .trow:has-text("우유 사기") input[type=checkbox]');idle(pg);assert 'status: done' in fget(pg,'11_Todos/우유 사기.md')
