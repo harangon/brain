@@ -47,6 +47,11 @@ header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px so
 .pill{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg);color:var(--fg2);font-size:13px}
 .pill select{border:0;background:transparent;padding:0;font-size:13px;color:var(--fg);max-width:120px}
 .pill select:focus{outline:none}
+button.pill{cursor:pointer}button.pill[aria-expanded=true]{background:var(--bg2);color:var(--fg)}
+.fbar{display:flex;gap:6px;padding:0 12px 8px;flex-wrap:wrap}
+.fchips{display:inline-flex;gap:4px;flex-wrap:wrap}
+.fchips button{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:12px;font-size:12.5px;background:color-mix(in srgb,var(--accent) 10%,var(--bg));color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line))}
+.fchips button span{opacity:.7}
 input.search{padding:5px 9px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg);min-width:110px}
 .icon{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--radius);color:var(--fg2)}
 .icon:hover{background:var(--bg2);color:var(--fg)}
@@ -420,10 +425,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
       <button role="tab" data-view="board">보드</button>
       <button role="tab" data-view="gallery">갤러리</button>
     </div>
-    <span class="pill" data-f>종류 <select id="fType"><option value="">전체</option><option value="note">노트</option><option value="project">프로젝트</option><option value="todo">할 일</option><option value="daily">데일리</option></select></span>
-    <span class="pill" data-f id="pillProject">프로젝트 <select id="fProject"><option value="">전체</option></select></span>
-    <span class="pill" data-f id="pillStatus">상태 <select id="fStatus"><option value="">전체</option></select></span>
-    <span class="pill" data-f>라벨 <select id="fLabel"><option value="">전체</option></select></span>
+    <button class="pill" id="btnFilter" aria-expanded="false" title="종류·프로젝트·상태·라벨로 거르기">필터</button><span class="fchips" id="fchips"></span>
     <span class="pill" id="pillGroup">그룹 <select id="fGroup"><option value="status">상태</option><option value="label">라벨</option><option value="project">프로젝트</option><option value="type">종류</option></select></span>
     <input class="search" id="q" type="search" placeholder="검색" aria-label="검색">
     <span class="sp"></span>
@@ -431,6 +433,12 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
     <button class="icon" id="btnReload" title="새로고침" aria-label="새로고침">↻</button>
     <span class="qbadge" id="qbadge" hidden></span>
     <button class="icon" id="btnSettings" title="설정" aria-label="설정">⚙</button>
+  </div>
+  <div class="fbar" id="filters" style="display:none">
+    <span class="pill" data-f>종류 <select id="fType"><option value="">전체</option><option value="note">노트</option><option value="project">프로젝트</option><option value="todo">할 일</option><option value="daily">데일리</option></select></span>
+    <span class="pill" data-f id="pillProject">프로젝트 <select id="fProject"><option value="">전체</option></select></span>
+    <span class="pill" data-f id="pillStatus">상태 <select id="fStatus"><option value="">전체</option></select></span>
+    <span class="pill" data-f>라벨 <select id="fLabel"><option value="">전체</option></select></span>
   </div>
   <div class="views" id="views"></div>
   <form class="quick" id="quick">
@@ -906,19 +914,45 @@ function visible(){
 function val(n,k){if(k==='title')return n.title;if(k==='project')return projectOf(n);if(k==='type')return TYPE_NAME[typeOf(n)];if(k==='updated')return n.fm.updated||n.fm.created||'';const v=n.fm[k]??'';return typeof v==='string'&&/^-?\d+(\.\d+)?$/.test(v)?Number(v):v;}
 
 /* ===================== 렌더 ===================== */
+/* 필터 버튼과 걸린 필터 칩. 보기(칩)가 정한 값은 빼고, 그 위에 더 건 것만 보여 준다 */
+let filtersOpen=false;
+const FILTER_KEYS=[['type','종류',v=>TYPE_NAME[v]||v],['project','프로젝트',v=>v==='__none'?'없음':v],['status','상태',v=>(statusOpt(v)||{name:v}).name],['label','라벨',v=>v==='__none'?'없음':(labelOpt(v)||{name:v}).name]];
+const viewBase=()=>BUILTIN_VIEWS.find(x=>x.id===state.saved)||optOf(config.views,state.saved)||{};
+function filterChanged(k){   // 보기가 정하지 않은 필터를 더 거는 것은 그 보기 안에서 좁히는 것
+  state.inbox=false;const b=BUILTIN_VIEWS.find(x=>x.id===state.saved);
+  if(state.arch)state.saved='b:archive';else if(!(b&&!b[k]))state.saved='';
+}
+function paintFilters(can){
+  const box=$('#fchips');box.innerHTML='';if(!can){return;}
+  const base=viewBase();let cnt=0;
+  for(const[k,name,fmt]of FILTER_KEYS){const v=state[k];if(!v||v===(base[k]||''))continue;cnt++;
+    box.append(el('button',{title:'필터 지우기','data-k':k,onclick:()=>{state[k]=base[k]||'';fillFolders();restoreControls();render();}},`${name}: ${fmt(v)}`,el('span',{},'✕')));}
+  const b=$('#btnFilter');b.textContent=cnt?`필터 ${cnt}`:'필터';b.setAttribute('aria-expanded',String(filtersOpen));
+}
+/* 빠른 메모: 보고 있는 프로젝트·라벨 필터를 물려받는다. 메모가 보일 수 없는 보기에서는 숨긴다 */
+function quickCtx(){
+  const project=state.project&&state.project!=='__none'&&projectList().includes(state.project)?state.project:'';
+  const label=state.label&&state.label!=='__none'&&labelOpt(state.label)?state.label:'';
+  return{project,label,text:[project,label?labelOpt(label).name:''].filter(Boolean).join(' · ')};
+}
+function paintQuick(isNotes){
+  const show=isNotes&&!state.arch&&(!state.type||state.type==='note');$('#quick').style.display=show?'':'none';if(!show)return;
+  const c=quickCtx();$('#quickText').placeholder=c.text?`메모 입력 — ${c.text}에 저장`:'메모 입력 — 정리 안 된 노트로 저장';
+}
 function render(){
   const isNotes=['table','board','gallery'].includes(state.view);
   document.querySelectorAll('.tabs:not(.sub) button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view==='notes'?isNotes:b.dataset.view===state.view));
   document.querySelectorAll('#subtabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===state.view));
   $('#subtabs').style.display=isNotes?'':'none';
   $('#pillGroup').style.display=state.view==='board'?'':'none';
-  document.querySelectorAll('[data-f]').forEach(p=>p.style.display=isNotes?'':'none');
+  const canFilter=isNotes&&!state.inbox;if(!canFilter)filtersOpen=false;   // 정리 안 된 노트 보기에는 거를 것이 없다
+  $('#btnFilter').style.display=canFilter?'':'none';$('#filters').style.display=canFilter&&filtersOpen?'':'none';
+  document.querySelectorAll('[data-f]').forEach(p=>p.style.display='');
   if(isNotes&&(state.type==='project'||state.type==='daily')){$('#pillProject').style.display='none';if(state.project){state.project='';$('#fProject').value='';}}
   if(isNotes&&state.type&&state.type!=='project'){$('#pillStatus').style.display='none';if(state.status){state.status='';$('#fStatus').value='';}}
   $('#q').style.display=(isNotes||state.view==='todo')?'':'none';
   $('#views').style.display=isNotes?'':'none';
-  $('#quick').style.display=(isNotes||state.view==='docs')?'':'none';
-  renderViews();saveState();
+  renderViews();paintFilters(canFilter);paintQuick(isNotes);saveState();
   if(state.view!=='docs')undockPanel();else{const p=$('#panel');if(p.classList.contains('docked'))document.body.append(p);}
   const m=$('#main');m.innerHTML='';
   if(state.view==='calendar')return renderCalendar(m);
@@ -1092,10 +1126,10 @@ async function archiveDoneTodos(list){
   for(const n of list)await saveNote(n,{archived:true},undefined,undefined,true);toast(`${list.length}개를 보관했습니다`);render();
 }
 /* 새 노트 만들기 (종류가 폴더를, 제목이 파일 이름을 정한다) */
-async function createNote({type='note',title,project='',due='',body='',tpl=null,quiet=false}){
+async function createNote({type='note',title,project='',label='',due='',body='',tpl=null,quiet=false}){
   title=String(title||'').trim();if(!title)return null;
   const path=uniquePath(FOLDER_OF[type],fileNameOf(title));
-  const base={type,...(type==='project'?{status:'active'}:{}),...(project?{project:pjLink(project)}:{}),...(due?{due}:{}),created:today()};
+  const base={type,...(type==='project'?{status:'active'}:{}),...(project?{project:pjLink(project)}:{}),...(label?{label}:{}),...(due?{due}:{}),created:today()};
   let raw=tpl?await fromTemplate(tpl,title):null;
   if(raw){const p=parseFM(raw);raw=buildFM({...p.fm,...base})+(h1Of(p.body)?p.body:`# ${title}\n\n`+p.body);}
   else raw=buildFM(base)+`# ${title}\n\n`+(body?body.replace(/\s*$/,'')+'\n':'');
@@ -1523,8 +1557,8 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('#settings').c
 $('#quick').onsubmit=async e=>{
   e.preventDefault();const text=$('#quickText').value.trim();if(!text)return;
   const lines=text.split('\n');$('#quickBtn').disabled=true;
-  const n=await createNote({type:'note',title:lines[0].replace(/^#+\s*/,''),body:lines.slice(1).join('\n').trim()});
-  $('#quickBtn').disabled=false;if(n){$('#quickText').value='';toast(n.sha?'정리 안 된 노트로 저장했습니다':'오프라인 — 연결되면 반영됩니다');}
+  const c=quickCtx();const n=await createNote({type:'note',title:lines[0].replace(/^#+\s*/,''),body:lines.slice(1).join('\n').trim(),project:c.project,label:c.label});
+  $('#quickBtn').disabled=false;if(n){$('#quickText').value='';toast(!n.sha?'오프라인 — 연결되면 반영됩니다':c.text?`${c.text}에 저장했습니다`:'정리 안 된 노트로 저장했습니다');}
 };
 
 /* ===================== 새 노트 ===================== */
@@ -1815,7 +1849,7 @@ $('#sSave').onclick=async()=>{
 /* ===================== 커맨드 팔레트 ===================== */
 let palItems=[],palIdx=0,palPick=null;
 function palCommands(){
-  const c=[{k:'새로',n:'빠른 메모',run:async()=>{if(!['table','board','gallery','docs'].includes(state.view))await switchView(lastNotesView);$('#quickText').focus();}},{k:'새로',n:'노트',run:()=>newNote('note')},{k:'새로',n:'할 일',run:()=>newNote('todo')},{k:'새로',n:'프로젝트',run:()=>newNote('project')}];
+  const c=[{k:'새로',n:'빠른 메모',run:async()=>{if(!['table','board','gallery'].includes(state.view))await switchView(lastNotesView);if($('#quick').style.display==='none')await applyView(BUILTIN_VIEWS[0]);$('#quickText').focus();}},{k:'새로',n:'노트',run:()=>newNote('note')},{k:'새로',n:'할 일',run:()=>newNote('todo')},{k:'새로',n:'프로젝트',run:()=>newNote('project')}];
   for(const[v,name]of[['docs','문서'],['table','노트 · 표'],['board','노트 · 보드'],['gallery','노트 · 갤러리'],['todo','할 일'],['calendar','일정']])c.push({k:'뷰',n:name,run:()=>switchView(v)});
   for(const sv of [...BUILTIN_VIEWS.filter(x=>!x.label||labelOpt(x.label)),...config.views])c.push({k:'보기',n:sv.name,run:()=>applyView(sv)});
   if(gcal.on()){c.push({k:'일정',n:'새 일정',run:()=>newEvent(today())},{k:'일정',n:'일정 검색…',run:async()=>{const q=await ask('일정 검색',{placeholder:'제목·장소 단어'});if(q){await switchView('calendar');searchEvents(q);}}});}
@@ -1857,7 +1891,8 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLower
 /* ===================== 컨트롤 ===================== */
 let lastNotesView=['table','board','gallery'].includes(state.view)?state.view:'table';
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{const v=b.dataset.view;if(['table','board','gallery'].includes(v)){lastNotesView=v;if(state.saved){state.subOf=state.subOf||{};state.subOf[state.saved]=v;}}switchView(v==='notes'?lastNotesView:v);});
-['#fType','#fProject','#fStatus','#fLabel','#fGroup'].forEach(s=>$(s).onchange=()=>{readControls();if(s!=='#fGroup'){state.inbox=false;state.saved=state.arch?'b:archive':'';}render();});
+['#fType','#fProject','#fStatus','#fLabel','#fGroup'].forEach(s=>$(s).onchange=()=>{readControls();if(s!=='#fGroup')filterChanged(s.slice(2).toLowerCase());render();});
+$('#btnFilter').onclick=()=>{filtersOpen=!filtersOpen;render();};
 let qT;$('#q').oninput=()=>{clearTimeout(qT);qT=setTimeout(()=>{readControls();render();},120);};
 $('#btnReload').onclick=()=>{localStorage.removeItem('brain.cache');load();};
 $('#qbadge').onclick=async()=>{if(!queue.list.length)return;if(navigator.onLine){await queue.flush();if(!queue.list.length)return;}if(await confirmAsk('대기 중인 변경을 버릴까요?',queue.list.map(x=>`${x.op==='del'?'삭제':'저장'} ${x.path}`).join('\n'),'버리기')){queue.list=[];queue.save();}};
