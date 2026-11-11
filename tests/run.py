@@ -10,8 +10,7 @@ def idle(pg,ms=350):pg.wait_for_timeout(ms)
 VIEW_ID={'정리 전':'b:inbox','노트':'b:all','프로젝트':'b:projects','보관함':'b:archive'}
 def view(pg,name):pg.click(f'#views button[data-id="{VIEW_ID[name]}"]');idle(pg)
 def tab(pg,name):pg.click(f'.tabs:not(.sub) button:has-text("{name}")');idle(pg)
-def filt(pg):
-    if not pg.is_visible('#filters'):pg.click('#btnFilter');idle(pg,150)
+def side(pg,k,v):pg.click(f'.nside button[data-k="{k}"][data-v="{v}"]');idle(pg)
 def rows(pg):return pg.eval_on_selector_all('#main tbody tr td.t>button:first-child','e=>e.map(x=>x.textContent)')
 def open_row(pg,title):pg.click(f'#main td.t>button:first-child:text-is("{title}")');idle(pg)
 def close(pg):pg.click('#pClose');idle(pg,200)
@@ -25,6 +24,7 @@ def t_load(pg):
     assert '20_Notes/옛 메모.md' in f and '00_Inbox/옛 메모.md' not in f,'옛 Inbox 노트가 20_Notes 로 안 옮겨짐'
     assert '20_Notes/옛 자료.md' in f and '30_Resources/옛 자료.md' not in f
     assert pg.get_attribute('#views button[data-id="b:inbox"]','aria-pressed')=='true'
+    assert pg.evaluate("getComputedStyle(document.querySelector('#btnSettings')).width")=='30px' and pg.evaluate("getComputedStyle(document.querySelector('#q')).borderRadius")!='0px','머리줄 스타일이 빠짐'
     daily=[t for t in rows(pg)[:5] if t.startswith('20')];assert len(daily)==1 and f'20_Notes/{daily[0]}.md' in f and not any(p.startswith('01_Daily/') for p in f),'옛 데일리 노트는 노트가 되어 20_Notes 로'
     assert set(rows(pg)[:5])-set(daily)=={'수납 아이디어','구조를 단순하게 가는 이유','주말에 볼 영상','옛 메모'},rows(pg)
     assert '정리 전 5' in pg.inner_text('#views') and '읽을 것' not in pg.inner_text('#views') and '모든 노트' not in pg.inner_text('#views')
@@ -47,28 +47,30 @@ def t_quick(pg):
     pg.fill('#quickText','새 메모 / 테스트?');pg.press('#quickText','Enter');idle(pg)
     assert any(p.startswith('20_Notes/새 메모 테스트 20') for p in files(pg)),'이름이 겹치면 날짜를 붙여야 함'
 def t_views(pg):
-    assert not pg.is_visible('#btnFilter'),'정리 전 보기에는 필터가 없어야 함'
+    assert pg.locator('.nside').count()==0 and '현재 보기 저장' not in pg.inner_text('#views'),'정리 전 보기에는 옆 목록이 없어야 함'
     view(pg,'노트');r=rows(pg);assert '수납장 문서 요약' in r and '집 정리' not in r and '우유 사기' not in r,r
-    assert pg.is_visible('#btnFilter') and not pg.is_visible('#filters') and pg.inner_text('#btnFilter')=='필터';filt(pg)
-    pg.select_option('#fProject','집 정리');idle(pg);assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어'},rows(pg)
-    # 보기 안에서 좁힌 것: 보기 칩은 그대로, 걸린 필터는 칩으로
-    assert pg.get_attribute('#views button[data-id="b:all"]','aria-pressed')=='true' and pg.inner_text('#btnFilter')=='필터 1' and '프로젝트: 집 정리' in pg.inner_text('#fchips')
-    # 메모는 보고 있는 프로젝트로 들어간다
+    st=pg.inner_text('.nside');assert '프로젝트 없음' in st and '집 정리' in st and '블로그 개편' in st and '라벨 없음' in st and '읽을 것' in st and '내 생각' in st,st
+    # 옆 목록에서 프로젝트를 누르면 그 프로젝트의 노트만. 보기 칩은 그대로
+    side(pg,'project','집 정리');assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어'},rows(pg)
+    assert pg.get_attribute('#views button[data-id="b:all"]','aria-pressed')=='true' and pg.get_attribute('.nside button[data-v="집 정리"]','aria-pressed')=='true'
+    # 메모는 보고 있는 프로젝트·라벨로 들어간다
     assert '집 정리에 저장' in pg.get_attribute('#quickText','placeholder')
     pg.fill('#quickText','선반 치수');pg.press('#quickText','Enter');idle(pg);c=fget(pg,'20_Notes/선반 치수.md');assert c and 'project: "[[집 정리]]"' in c,c
-    assert '선반 치수' in rows(pg);pg.select_option('#fLabel','resource');idle(pg);assert '집 정리 · 자료에 저장' in pg.get_attribute('#quickText','placeholder')
+    assert '선반 치수' in rows(pg);side(pg,'label','resource');assert '집 정리 · 자료에 저장' in pg.get_attribute('#quickText','placeholder')
     pg.fill('#quickText','선반 자료');pg.press('#quickText','Enter');idle(pg);c=fget(pg,'20_Notes/선반 자료.md');assert 'label: resource' in c and '선반 자료' in rows(pg),c
-    pg.click('#fchips button[data-k=label]');idle(pg);pg.click('#fchips button[data-k=project]');idle(pg);assert pg.inner_text('#btnFilter')=='필터' and '정리 전 노트로 저장' in pg.get_attribute('#quickText','placeholder')
-    filt(pg);pg.select_option('#fProject','집 정리');idle(pg);assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어','선반 치수','선반 자료'},rows(pg)
-    pg.select_option('#fProject','__none');pg.select_option('#fLabel','__none');idle(pg);r=rows(pg);assert '주말에 볼 영상' in r and '정리는 버리는 것부터' not in r,r
-    pg.select_option('#fProject','');pg.select_option('#fLabel','');pg.select_option('#fType','');idle(pg)
-    assert '종류' in pg.inner_text('#main thead') and '집 정리' in rows(pg) and '끝난 일' not in rows(pg)
-    pg.select_option('#fLabel','read');idle(pg);assert set(rows(pg))=={'수납장 문서 요약','옛 자료'},rows(pg)
+    # 다시 누르면 풀린다
+    side(pg,'label','resource');side(pg,'project','집 정리');assert '정리 전 노트로 저장' in pg.get_attribute('#quickText','placeholder') and '주말에 볼 영상' in rows(pg)
+    side(pg,'project','집 정리');assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어','선반 치수','선반 자료'},rows(pg)
+    side(pg,'project','__none');side(pg,'label','__none');r=rows(pg);assert '주말에 볼 영상' in r and '정리는 버리는 것부터' not in r and '선반 치수' not in r,r
+    side(pg,'project','');side(pg,'label','read');assert set(rows(pg))=={'수납장 문서 요약','옛 자료'},rows(pg)
+    side(pg,'label','idea');assert rows(pg)==[] and '해당하는 노트가 없습니다' in pg.inner_text('#main') and pg.locator('.nside').count()==1
+    side(pg,'label','');assert '종류' not in pg.inner_text('#main thead')
     view(pg,'프로젝트');assert not pg.is_visible('#quick'),'프로젝트 보기에는 메모 입력이 없어야 함'
     cols=pg.eval_on_selector_all('.board .col h3','e=>e.map(x=>x.textContent)');assert any('진행' in c for c in cols) and any('보류' in c for c in cols),cols
     shot(pg,'02-projects-board')
-    view(pg,'노트');pg.click('#subtabs button:has-text("보드")');idle(pg);pg.select_option('#fGroup','project');idle(pg)
+    view(pg,'노트');pg.click('#subtabs button:has-text("보드")');idle(pg)
     cols=pg.eval_on_selector_all('.board .col h3','e=>e.map(x=>x.textContent)');assert any('집 정리' in c for c in cols) and any('없음' in c for c in cols),cols
+    pg.select_option('#fGroup','label');idle(pg);cols=pg.eval_on_selector_all('.board .col h3','e=>e.map(x=>x.textContent)');assert any('자료' in c for c in cols),cols;pg.select_option('#fGroup','project');idle(pg)
     shot(pg,'03-notes-by-project')
     pg.click('#subtabs button:has-text("갤러리")');idle(pg);assert pg.locator('.gcard').count()>3
     pg.click('#subtabs button:has-text("표")');idle(pg)
@@ -149,7 +151,7 @@ def t_misc(pg):
     tab(pg,'일정');assert pg.locator('.calgrid .day').count()==42
     pg.fill('.evbar input[type=search]','치과');pg.press('.evbar input[type=search]','Enter');idle(pg);assert '검색 결과 · 1건' in pg.inner_text('#main')
     pg.click('#main button:text-is("닫기")');idle(pg);assert pg.locator('.calgrid .day').count()==42 and '마감 노트' not in pg.inner_text('#main');shot(pg,'07-calendar')
-    tab(pg,'문서');assert not pg.is_visible('#quick') and not pg.is_visible('#btnFilter'),'문서 탭에는 메모 입력·필터가 없어야 함'
+    tab(pg,'문서');assert not pg.is_visible('#quick') and pg.locator('.nside').count()==0,'문서 탭에는 메모 입력·옆 목록이 없어야 함'
     tree=pg.inner_text('.tree');assert 'Notes' in tree and 'Todos' in tree and 'Inbox' not in tree,tree
     pg.click('.tree .tn:has-text("수납 아이디어")');idle(pg);assert pg.input_value('#pTitle')=='수납 아이디어' and pg.inner_text('#pPath')=='20_Notes/수납 아이디어.md'
     pg.fill('#pBody','본문 수정');pg.click('#pSave');idle(pg);assert '본문 수정' in fget(pg,'20_Notes/수납 아이디어.md');shot(pg,'08-docs')
@@ -184,11 +186,7 @@ def t_links(pg):
     assert pg.input_value(ta).endswith('[[수납 아이디어]][[옛 메모]]'),pg.input_value(ta)
     pg.click('#card .dedit button:text-is("저장")');idle(pg);assert '[[옛 메모]]' in fget(pg,'20_Notes/수납장 문서 요약.md') and '옛 메모' in pg.inner_text('#card');close(pg)
 def t_settings(pg):
-    tab(pg,'노트');view(pg,'노트');filt(pg);pg.select_option('#fLabel','read');idle(pg)
-    pg.click('#views button.save');pg.fill('#askField input','읽을 것');ok(pg)
-    assert pg.get_attribute('#views button:text-is("읽을 것")','aria-pressed')=='true'
-    pg.click('#btnSettings');idle(pg,200);tabs=pg.inner_text('#settings .mh');assert '저장한 보기' in tabs and '뷰' not in pg.inner_text('#settings')
-    pg.click('#settings .mh button[data-tab=views]');idle(pg,200);assert '표 · 노트 · 라벨: 읽을 것' in pg.inner_text('#optViews'),pg.inner_text('#optViews')
+    pg.click('#btnSettings');idle(pg,200);tabs=pg.inner_text('#settings .mh');assert '저장한 보기' not in tabs and '뷰' not in pg.inner_text('#settings')
     pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
     assert pg.locator('#optStatus .opt').count()==3 and pg.locator('#optStatus .opt button.x').count()==1 and pg.locator('#optStatus input.id[disabled]').count()==2
     pg.click('#sCancel');idle(pg,200)
