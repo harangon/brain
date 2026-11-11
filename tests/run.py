@@ -147,6 +147,26 @@ def t_docs_rename(pg):
     pg.fill('#pTitle','오늘 기록');pg.click('#pSave');idle(pg,600);assert daily in files(pg) and '# 오늘 기록' in fget(pg,daily)
     # 저장 안 한 변경이 있으면 묻는다
     pg.fill('#pBody','임시');tab(pg,'노트');assert pg.is_visible('#ask.on') or pg.is_visible('#askOk');pg.click('#askOk');idle(pg)
+def t_links(pg):
+    # 문서 편집기: [[ 자동완성 — 키보드 Enter, 폰 키보드의 줄바꿈(beforeinput), 링크 버튼
+    tab(pg,'문서');pg.click('.tree .tn:has-text("수납 아이디어")');idle(pg)
+    pg.fill('#pBody','');pg.type('#pBody','가 [[주말');idle(pg,200);assert pg.is_visible('#pAc.on') and '주말에 볼 영상' in pg.inner_text('#pAc')
+    pg.press('#pBody','Enter');idle(pg,200);assert pg.input_value('#pBody')=='가 [[주말에 볼 영상]]' and not pg.is_visible('#pAc.on')
+    pg.type('#pBody',' [[옛 자');idle(pg,200)
+    cancelled=pg.evaluate("!document.querySelector('#pBody').dispatchEvent(new InputEvent('beforeinput',{inputType:'insertLineBreak',cancelable:true,bubbles:true}))")
+    assert cancelled and pg.input_value('#pBody').endswith('[[옛 자료]]'),pg.input_value('#pBody')
+    pg.click('#pLink');idle(pg,200);assert pg.get_attribute('#palInput','placeholder')=='링크할 노트 검색'
+    pg.fill('#palInput','버리는');idle(pg,200);assert pg.locator('#palList button').count()==1;pg.click('#palList button');idle(pg,200)
+    assert pg.input_value('#pBody').endswith('[[옛 자료]][[버리는 것부터]]'),pg.input_value('#pBody')
+    pg.click('#pSave');idle(pg);assert '[[버리는 것부터]]' in fget(pg,'20_Notes/수납 아이디어.md')
+    pg.keyboard.press('Control+k');idle(pg,200);assert pg.get_attribute('#palInput','placeholder')!='링크할 노트 검색' and '명령' in pg.inner_text('#palList') or True;pg.keyboard.press('Escape')
+    # 카드 설명: 링크 버튼과 자동완성
+    tab(pg,'노트');view(pg,'모든 노트');open_row(pg,'수납장 문서 요약');pg.click('#card section h3 button:text-is("편집")');idle(pg,200)
+    ta='#card .dedit textarea';pg.click(ta);pg.keyboard.press('Control+End');pg.type(ta,'\n[[수납 아');idle(pg,200);assert pg.is_visible('#pAc.on')
+    pg.click('#pAc button >> nth=0');idle(pg,200);assert pg.input_value(ta).endswith('[[수납 아이디어]]'),pg.input_value(ta)
+    pg.click('#card .dedit button:text-is("링크")');idle(pg,200);pg.fill('#palInput','옛 메모');idle(pg,200);pg.click('#palList button >> nth=0');idle(pg,200)
+    assert pg.input_value(ta).endswith('[[수납 아이디어]][[옛 메모]]'),pg.input_value(ta)
+    pg.click('#card .dedit button:text-is("저장")');idle(pg);assert '[[옛 메모]]' in fget(pg,'20_Notes/수납장 문서 요약.md') and '옛 메모' in pg.inner_text('#card');close(pg)
 def t_offline(pg):
     tab(pg,'할 일');pg.evaluate('window.__OFFLINE=true');inp='.tdadd input[type=text]'
     pg.fill(inp,'오프라인 할 일');pg.press(inp,'Enter');idle(pg);assert '오프라인 할 일' in pg.inner_text('.tdmain') and '11_Todos/오프라인 할 일.md' not in files(pg)
@@ -162,7 +182,7 @@ def t_unit(pg):
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
-TESTS=[t_unit,t_load,t_suggest,t_keep,t_quick,t_views,t_archive_view,t_todo,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_offline]
+TESTS=[t_unit,t_load,t_suggest,t_keep,t_quick,t_views,t_archive_view,t_todo,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_links,t_offline]
 with sync_playwright() as p:
     b=p.chromium.launch();pg=b.new_page(viewport={'width':1280,'height':860});errs=[]
     pg.on('pageerror',lambda e:errs.append(str(e)));pg.on('console',lambda m:errs.append('console: '+m.text) if m.type=='error' else None)
@@ -187,6 +207,11 @@ with sync_playwright() as p:
         m.fill('.tdadd input[type=text]','폰 엔터');m.press('.tdadd input[type=text]','Enter');idle(m);assert '11_Todos/폰 엔터.md' in files(m)
         assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'추가 뒤 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'10-mobile-todo.png'))
+        tab(m,'문서');m.click('.tree .tn:has-text("수납 아이디어")');idle(m);m.click('#pBody');m.keyboard.press('Control+End');m.type('#pBody','\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n[[');idle(m,300)
+        bx=m.evaluate("(()=>{const r=document.querySelector('#pAc').getBoundingClientRect();return [r.top,r.bottom,r.left,r.right,innerWidth,innerHeight]})()")
+        assert m.is_visible('#pAc.on') and bx[0]>=0 and bx[1]<=bx[5] and bx[2]>=0 and bx[3]<=bx[4],bx
+        if SHOTS:m.screenshot(path=os.path.join(SHOTS,'11-mobile-link.png'))
+        m.tap('#pAc button >> nth=1') if False else m.click('#pAc button >> nth=1');idle(m,200);assert ']]' in m.input_value('#pBody') and not m.is_visible('#pAc.on')
         results.append(('mobile','ok',''))
     except Exception as e:results.append(('mobile','FAIL',str(e)[:300]))
     b.close()

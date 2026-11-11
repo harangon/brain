@@ -255,11 +255,12 @@ td input.inl{width:118px}
 .card-v .actions .btn{font-size:12.5px}
 .card-v .links{margin-top:0}
 @media (max-width:640px){.card-v{padding:12px 14px 24px}}
-.ac{position:absolute;z-index:5;background:var(--bg);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.12);max-height:220px;overflow:auto;min-width:220px;display:none}
+.ac{position:fixed;z-index:80;max-width:calc(100vw - 16px);background:var(--bg);border:1px solid var(--line);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.12);max-height:220px;overflow:auto;min-width:220px;display:none}
 .ac.on{display:block}
 .ac button{display:block;width:100%;text-align:left;padding:6px 10px;font-size:13px;background:none;border:0;color:var(--fg)}
 .ac button[aria-selected=true],.ac button:hover{background:var(--bg2)}
 .ac button small{color:var(--fg3);margin-left:6px}
+@media (pointer:coarse),(max-width:640px){.ac button{padding:11px 14px;font-size:15px}.ac{max-height:260px}}
 .ptools{display:flex;gap:6px;align-items:center;margin:0 0 6px;font-size:12px;color:var(--fg3)}
 .daylist .add{margin-top:8px}
 .day .it.ev{background:var(--evbg,#e7f1fb);color:var(--fg);border-left:3px solid var(--evc,#4a86c5);padding-left:3px}
@@ -459,7 +460,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
     </div>
     <div class="props" id="pProps"></div>
     <div class="plist" id="pList" hidden></div>
-    <div class="ptools"><button class="btn sm" id="pAttach">이미지 첨부</button><span>붙여넣기·드래그도 됩니다 · [[ 로 링크 자동완성</span><input type="file" id="pFile" accept="image/*" multiple hidden></div>
+    <div class="ptools"><button class="btn sm" id="pAttach">이미지 첨부</button><button class="btn sm" id="pLink" title="다른 노트로 가는 링크 넣기">링크</button><span>이미지는 붙여넣기·드래그도 됩니다 · [[ 를 쳐도 링크 목록이 뜹니다</span><input type="file" id="pFile" accept="image/*" multiple hidden></div>
     <textarea id="pBody" spellcheck="false" aria-label="본문"></textarea>
     <div class="ac" id="pAc" role="listbox"></div>
     <div class="preview" id="pPreview" hidden></div>
@@ -1596,8 +1597,8 @@ function renderCard(n){
   // 설명
   const sec=el('section',{});sec.append(el('h3',{},'설명',el('span',{class:'sp'}),descEditing?'':el('button',{class:'btn sm',onclick:()=>{descEditing=true;renderCard(n);}},desc?'편집':'추가')));
   if(descEditing){
-    const ta=el('textarea',{spellcheck:'false','aria-label':'본문 마크다운'});ta.value=stripH1(n.body);
-    const ed=el('div',{class:'dedit'},ta,el('div',{class:'row'},el('button',{class:'btn primary sm',onclick:async()=>{descEditing=false;await saveNote(n,{},undefined,ta.value,true);renderCard(n);}},'저장'),el('button',{class:'btn sm',onclick:()=>{descEditing=false;renderCard(n);}},'취소'),el('span',{class:'evnote'},'마크다운 전체를 편집합니다 (체크리스트 포함)')));
+    const ta=el('textarea',{spellcheck:'false','aria-label':'본문 마크다운'});ta.value=stripH1(n.body);acAttach(ta);
+    const ed=el('div',{class:'dedit'},ta,el('div',{class:'row'},el('button',{class:'btn primary sm',onclick:async()=>{descEditing=false;await saveNote(n,{},undefined,ta.value,true);renderCard(n);}},'저장'),el('button',{class:'btn sm',onclick:()=>{descEditing=false;renderCard(n);}},'취소'),el('button',{class:'btn sm',title:'다른 노트로 가는 링크 넣기',onclick:()=>insertLink(ta)},'링크'),el('span',{class:'evnote'},'마크다운 전체를 편집합니다 (체크리스트 포함)')));
     sec.append(ed);box.append(sec);setTimeout(()=>ta.focus(),30);
   }else{
     const d=el('div',{class:'desc'+(desc?'':' empty'),onclick:e=>{if(e.target.closest('a'))return;descEditing=true;renderCard(n);}});
@@ -1704,30 +1705,45 @@ $('#pBody').addEventListener('dragover',e=>{if(e.dataTransfer?.types.includes('F
 $('#pBody').addEventListener('drop',e=>{const fs=[...(e.dataTransfer?.files||[])];if(fs.length){e.preventDefault();attachFiles(fs);}});
 
 /* ===================== [[링크]] 자동완성 ===================== */
-let acItems=[],acIdx=0,acRange=null;
+let acItems=[],acIdx=0,acRange=null,acTa=null;
 function acClose(){$('#pAc').classList.remove('on');acItems=[];acRange=null;}
-function acUpdate(){
-  const ta=$('#pBody');const pos=ta.selectionStart;const before=ta.value.slice(0,pos);
+function acUpdate(ta){
+  acTa=ta;const pos=ta.selectionStart;const before=ta.value.slice(0,pos);
   const m=before.match(/\[\[([^\[\]\n]*)$/);if(!m){acClose();return;}
   const q=m[1].toLowerCase();acRange=[pos-m[1].length,pos];
-  acItems=notes.filter(n=>n!==current&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>a.title.toLowerCase().startsWith(q)&&!b.title.toLowerCase().startsWith(q)?-1:1).slice(0,8);
+  acItems=notes.filter(n=>n!==current&&!isArchived(n)&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>a.title.toLowerCase().startsWith(q)&&!b.title.toLowerCase().startsWith(q)?-1:1).slice(0,8);
   if(!acItems.length){acClose();return;}
   acIdx=0;acRender();
+  // 입력 줄 바로 아래에, 화면(키보드 위) 밖으로 나가면 줄 위에 띄운다
   const box=$('#pAc');box.classList.add('on');
-  const lines=before.split('\n').length;const lh=parseFloat(getComputedStyle(ta).lineHeight)||22;
-  box.style.left='10px';box.style.top=(ta.offsetTop+Math.min(lines*lh+6-ta.scrollTop,ta.clientHeight-10))+'px';
+  const r=ta.getBoundingClientRect(),cs=getComputedStyle(ta);const lh=parseFloat(cs.lineHeight)||22;const lines=before.split('\n').length;
+  const lineBottom=r.top+Math.max(lh,Math.min((parseFloat(cs.paddingTop)||0)+lines*lh-ta.scrollTop,ta.clientHeight));
+  const vv=window.visualViewport;const vTop=vv?vv.offsetTop:0,vBottom=vv?vv.offsetTop+vv.height:innerHeight;const h=box.offsetHeight,w=box.offsetWidth;
+  let top=lineBottom+6;if(top+h>vBottom-6)top=Math.max(vTop+6,lineBottom-lh-h-6);
+  box.style.top=top+'px';box.style.left=Math.max(8,Math.min(r.left+10,innerWidth-w-8))+'px';
 }
-function acRender(){const box=$('#pAc');box.innerHTML='';acItems.forEach((n,i)=>box.append(el('button',{role:'option','aria-selected':String(i===acIdx),onmousedown:e=>{e.preventDefault();acPick(i);}},n.title,el('small',{},TYPE_NAME[typeOf(n)]))));}
-function acPick(i){const ta=$('#pBody');const n=acItems[i];if(!n||!acRange)return;const after=ta.value.slice(acRange[1]);const close=after.startsWith(']]')?'':']]';
+function acRender(){const box=$('#pAc');box.innerHTML='';acItems.forEach((n,i)=>box.append(el('button',{type:'button',role:'option','aria-selected':String(i===acIdx),onmousedown:e=>{e.preventDefault();acPick(i);}},n.title,el('small',{},TYPE_NAME[typeOf(n)]))));}
+function acPick(i){const ta=acTa;const n=acItems[i];if(!ta||!n||!acRange)return;const after=ta.value.slice(acRange[1]);const close=after.startsWith(']]')?'':']]';
   ta.value=ta.value.slice(0,acRange[0])+n.title+close+after;const p=acRange[0]+n.title.length+2;ta.setSelectionRange(p,p);acClose();ta.focus();}
-$('#pBody').addEventListener('input',acUpdate);
-$('#pBody').addEventListener('click',acUpdate);
-$('#pBody').addEventListener('blur',()=>setTimeout(acClose,150));
-$('#pBody').addEventListener('keydown',e=>{if(!acItems.length)return;
-  if(e.key==='ArrowDown'){e.preventDefault();acIdx=(acIdx+1)%acItems.length;acRender();}
-  else if(e.key==='ArrowUp'){e.preventDefault();acIdx=(acIdx-1+acItems.length)%acItems.length;acRender();}
-  else if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();acPick(acIdx);}
-  else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();acClose();}});
+/* 본문 입력칸에 [[ 자동완성을 붙인다 (문서 편집기, 카드 설명) */
+function acAttach(ta){
+  ta.addEventListener('input',()=>acUpdate(ta));ta.addEventListener('click',()=>acUpdate(ta));
+  ta.addEventListener('blur',()=>setTimeout(()=>{if(acTa===ta)acClose();},150));
+  ta.addEventListener('keydown',e=>{if(!acItems.length||acTa!==ta)return;
+    if(e.key==='ArrowDown'){e.preventDefault();acIdx=(acIdx+1)%acItems.length;acRender();}
+    else if(e.key==='ArrowUp'){e.preventDefault();acIdx=(acIdx-1+acItems.length)%acItems.length;acRender();}
+    else if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();acPick(acIdx);}
+    else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();acClose();}});
+  // 폰 키보드는 Enter 가 키 입력으로 안 오고 "줄바꿈 넣기"로 온다 → 목록이 떠 있으면 고르기로 바꾼다
+  ta.addEventListener('beforeinput',e=>{if(acItems.length&&acTa===ta&&(e.inputType==='insertLineBreak'||e.inputType==='insertParagraph')){e.preventDefault();acPick(acIdx);}});
+}
+document.body.append($('#pAc'));acAttach($('#pBody'));
+/* "링크" 버튼: 노트를 검색해 골라 커서 자리에 [[제목]] 을 넣는다 */
+function insertLink(ta){
+  const a=ta.selectionStart??ta.value.length,b=ta.selectionEnd??a;
+  pickNote(n=>{const link=`[[${n.title}]]`;ta.value=ta.value.slice(0,a)+link+ta.value.slice(b);const p=a+link.length;ta.focus();ta.setSelectionRange(p,p);});
+}
+$('#pLink').onclick=()=>insertLink($('#pBody'));
 
 /* ===================== 설정 모달 ===================== */
 function optRow(list,o,listEl){
@@ -1797,7 +1813,7 @@ $('#sSave').onclick=async()=>{
 };
 
 /* ===================== 커맨드 팔레트 ===================== */
-let palItems=[],palIdx=0;
+let palItems=[],palIdx=0,palPick=null;
 function palCommands(){
   const c=[{k:'새로',n:'빠른 메모',run:async()=>{if(!['table','board','gallery','docs'].includes(state.view))await switchView(lastNotesView);$('#quickText').focus();}},{k:'새로',n:'노트',run:()=>newNote('note')},{k:'새로',n:'할 일',run:()=>newNote('todo')},{k:'새로',n:'프로젝트',run:()=>newNote('project')}];
   for(const[v,name]of[['docs','문서'],['table','노트 · 표'],['board','노트 · 보드'],['gallery','노트 · 갤러리'],['todo','할 일'],['calendar','일정']])c.push({k:'뷰',n:name,run:()=>switchView(v)});
@@ -1808,19 +1824,25 @@ function palCommands(){
   c.push({k:'동작',n:'설정',run:()=>openSettings('conn')});
   return c;
 }
-function openPalette(){$('#palette').classList.add('on');$('#palInput').value='';palRender();setTimeout(()=>$('#palInput').focus(),30);}
-function closePalette(){$('#palette').classList.remove('on');}
+function openPalette(){$('#palette').classList.add('on');$('#palInput').value='';$('#palInput').placeholder=palPick?'링크할 노트 검색':PAL_PH;palRender();setTimeout(()=>$('#palInput').focus(),30);}
+function closePalette(){$('#palette').classList.remove('on');palPick=null;}
+function pickNote(cb){palPick=cb;openPalette();}
+const PAL_PH=$('#palInput').placeholder;
 function palRender(){
   const q=$('#palInput').value.trim();const list=$('#palList');list.innerHTML='';palItems=[];palIdx=0;
   const cmdMode=q.startsWith('>');const qq=(cmdMode?q.slice(1):q).trim().toLowerCase();
-  if(!cmdMode){
+  if(palPick){const cb=palPick;
+    const hits=notes.filter(n=>n!==current&&!isArchived(n)&&(!qq||n.title.toLowerCase().includes(qq))).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1).slice(0,30);
+    if(hits.length)list.append(el('div',{class:'sec'},qq?'노트':'최근 노트'));
+    for(const n of hits)palItems.push({label:n.title,k:TYPE_NAME[typeOf(n)],run:()=>cb(n)});
+  }else if(!cmdMode){
     const hits=(qq?notes:[...notes].sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1)).filter(n=>!qq||n.title.toLowerCase().includes(qq)||n.path.toLowerCase().includes(qq)).slice(0,qq?30:8);
     if(hits.length)list.append(el('div',{class:'sec'},qq?'노트':'최근 노트'));
     for(const n of hits)palItems.push({label:n.title,k:TYPE_NAME[typeOf(n)]+(isArchived(n)?' · 보관':''),run:()=>openNote(n)});
     if(qq&&hits.length<30){list.append(el('div',{class:'sec'},'본문 검색'));
       for(const n of notes.filter(n=>!hits.includes(n)&&n.body.toLowerCase().includes(qq)).slice(0,10))palItems.push({label:n.title,k:'본문',run:()=>openNote(n)});}
   }
-  const cmds=palCommands().filter(c=>!qq||(c.k+' '+c.n).toLowerCase().includes(qq));
+  const cmds=palPick?[]:palCommands().filter(c=>!qq||(c.k+' '+c.n).toLowerCase().includes(qq));
   if(cmds.length&&(cmdMode||qq||!palItems.length)){list.append(el('div',{class:'sec'},'명령'));for(const c of cmds)palItems.push({label:c.n,k:c.k,run:c.run});}
   if(!palItems.length)list.append(el('div',{class:'sec'},'결과 없음'));
   palItems.forEach((it,i)=>list.append(el('button',{role:'option','aria-selected':i===palIdx?'true':'false',onclick:()=>{closePalette();it.run();},onmousemove:()=>{palIdx=i;palHi();}},el('span',{class:'k'},it.k),el('span',{class:'n'},it.label))));
