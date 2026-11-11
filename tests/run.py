@@ -7,7 +7,8 @@ results=[]
 def files(pg):return pg.evaluate('Object.keys(__FILES)')
 def fget(pg,p):return pg.evaluate('p=>__FILES[p]',p)
 def idle(pg,ms=350):pg.wait_for_timeout(ms)
-def view(pg,name):pg.click(f'#views button:has-text("{name}")');idle(pg)
+VIEW_ID={'정리 전':'b:inbox','노트':'b:all','프로젝트':'b:projects','보관함':'b:archive'}
+def view(pg,name):pg.click(f'#views button[data-id="{VIEW_ID[name]}"]');idle(pg)
 def tab(pg,name):pg.click(f'.tabs:not(.sub) button:has-text("{name}")');idle(pg)
 def filt(pg):
     if not pg.is_visible('#filters'):pg.click('#btnFilter');idle(pg,150)
@@ -24,8 +25,9 @@ def t_load(pg):
     assert '20_Notes/옛 메모.md' in f and '00_Inbox/옛 메모.md' not in f,'옛 Inbox 노트가 20_Notes 로 안 옮겨짐'
     assert '20_Notes/옛 자료.md' in f and '30_Resources/옛 자료.md' not in f
     assert pg.get_attribute('#views button[data-id="b:inbox"]','aria-pressed')=='true'
-    assert set(rows(pg)[:4])=={'수납 아이디어','구조를 단순하게 가는 이유','주말에 볼 영상','옛 메모'},rows(pg)
-    assert '정리 안 된 노트 4' in pg.inner_text('#views')
+    daily=[t for t in rows(pg)[:5] if t.startswith('20')];assert len(daily)==1 and f'20_Notes/{daily[0]}.md' in f and not any(p.startswith('01_Daily/') for p in f),'옛 데일리 노트는 노트가 되어 20_Notes 로'
+    assert set(rows(pg)[:5])-set(daily)=={'수납 아이디어','구조를 단순하게 가는 이유','주말에 볼 영상','옛 메모'},rows(pg)
+    assert '정리 전 5' in pg.inner_text('#views') and '읽을 것' not in pg.inner_text('#views') and '모든 노트' not in pg.inner_text('#views')
     assert '최근 정리된 노트' in pg.inner_text('#main')
     shot(pg,'01-inbox')
 def t_suggest(pg):
@@ -37,7 +39,7 @@ def t_suggest(pg):
 def t_keep(pg):
     pg.click('tr[data-path="20_Notes/주말에 볼 영상.md"] .keep');idle(pg)
     assert 'reviewed: true' in fget(pg,'20_Notes/주말에 볼 영상.md')
-    assert '정리 안 된 노트 1' in pg.inner_text('#views')
+    assert '정리 전 2' in pg.inner_text('#views')
 def t_quick(pg):
     pg.fill('#quickText','새 메모 / 테스트?');pg.press('#quickText','Enter');idle(pg)
     c=fget(pg,'20_Notes/새 메모 테스트.md');assert c and '# 새 메모 / 테스트?' in c and 'type: note' in c,c
@@ -45,8 +47,8 @@ def t_quick(pg):
     pg.fill('#quickText','새 메모 / 테스트?');pg.press('#quickText','Enter');idle(pg)
     assert any(p.startswith('20_Notes/새 메모 테스트 20') for p in files(pg)),'이름이 겹치면 날짜를 붙여야 함'
 def t_views(pg):
-    assert not pg.is_visible('#btnFilter'),'정리 안 된 노트 보기에는 필터가 없어야 함'
-    view(pg,'모든 노트');r=rows(pg);assert '수납장 문서 요약' in r and '집 정리' not in r and '우유 사기' not in r,r
+    assert not pg.is_visible('#btnFilter'),'정리 전 보기에는 필터가 없어야 함'
+    view(pg,'노트');r=rows(pg);assert '수납장 문서 요약' in r and '집 정리' not in r and '우유 사기' not in r,r
     assert pg.is_visible('#btnFilter') and not pg.is_visible('#filters') and pg.inner_text('#btnFilter')=='필터';filt(pg)
     pg.select_option('#fProject','집 정리');idle(pg);assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어'},rows(pg)
     # 보기 안에서 좁힌 것: 보기 칩은 그대로, 걸린 필터는 칩으로
@@ -56,16 +58,16 @@ def t_views(pg):
     pg.fill('#quickText','선반 치수');pg.press('#quickText','Enter');idle(pg);c=fget(pg,'20_Notes/선반 치수.md');assert c and 'project: "[[집 정리]]"' in c,c
     assert '선반 치수' in rows(pg);pg.select_option('#fLabel','resource');idle(pg);assert '집 정리 · 자료에 저장' in pg.get_attribute('#quickText','placeholder')
     pg.fill('#quickText','선반 자료');pg.press('#quickText','Enter');idle(pg);c=fget(pg,'20_Notes/선반 자료.md');assert 'label: resource' in c and '선반 자료' in rows(pg),c
-    pg.click('#fchips button[data-k=label]');idle(pg);pg.click('#fchips button[data-k=project]');idle(pg);assert pg.inner_text('#btnFilter')=='필터' and '정리 안 된 노트로 저장' in pg.get_attribute('#quickText','placeholder')
+    pg.click('#fchips button[data-k=label]');idle(pg);pg.click('#fchips button[data-k=project]');idle(pg);assert pg.inner_text('#btnFilter')=='필터' and '정리 전 노트로 저장' in pg.get_attribute('#quickText','placeholder')
     filt(pg);pg.select_option('#fProject','집 정리');idle(pg);assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어','선반 치수','선반 자료'},rows(pg)
     pg.select_option('#fProject','__none');pg.select_option('#fLabel','__none');idle(pg);r=rows(pg);assert '주말에 볼 영상' in r and '정리는 버리는 것부터' not in r,r
     pg.select_option('#fProject','');pg.select_option('#fLabel','');pg.select_option('#fType','');idle(pg)
     assert '종류' in pg.inner_text('#main thead') and '집 정리' in rows(pg) and '끝난 일' not in rows(pg)
-    view(pg,'읽을 것');assert set(rows(pg))=={'수납장 문서 요약','옛 자료'},rows(pg)
+    pg.select_option('#fLabel','read');idle(pg);assert set(rows(pg))=={'수납장 문서 요약','옛 자료'},rows(pg)
     view(pg,'프로젝트');assert not pg.is_visible('#quick'),'프로젝트 보기에는 메모 입력이 없어야 함'
     cols=pg.eval_on_selector_all('.board .col h3','e=>e.map(x=>x.textContent)');assert any('진행' in c for c in cols) and any('보류' in c for c in cols),cols
     shot(pg,'02-projects-board')
-    view(pg,'모든 노트');pg.click('#subtabs button:has-text("보드")');idle(pg);pg.select_option('#fGroup','project');idle(pg)
+    view(pg,'노트');pg.click('#subtabs button:has-text("보드")');idle(pg);pg.select_option('#fGroup','project');idle(pg)
     cols=pg.eval_on_selector_all('.board .col h3','e=>e.map(x=>x.textContent)');assert any('집 정리' in c for c in cols) and any('없음' in c for c in cols),cols
     shot(pg,'03-notes-by-project')
     pg.click('#subtabs button:has-text("갤러리")');idle(pg);assert pg.locator('.gcard').count()>3
@@ -96,7 +98,7 @@ def t_todo(pg):
     pg.click('.tdadd .chip[data-id=none]');idle(pg);assert not pg.is_visible('.tdtoday') and not pg.is_visible('[data-sec=todaylate]')
     pg.click('.tdadd .chip[data-id=today]');idle(pg)
 def t_convert(pg):
-    tab(pg,'노트');view(pg,'모든 노트');open_row(pg,'주말에 볼 영상');shot(pg,'05-note-card')
+    tab(pg,'노트');view(pg,'노트');open_row(pg,'주말에 볼 영상');shot(pg,'05-note-card')
     act(pg,'할 일로 바꾸기');idle(pg,500)
     c=fget(pg,'11_Todos/주말에 볼 영상.md');assert c and 'type: todo' in c and 'reviewed' not in c,c
     assert '20_Notes/주말에 볼 영상.md' not in files(pg) and pg.inner_text('#pPath').startswith('할 일')
@@ -106,7 +108,7 @@ def t_convert(pg):
     c=fget(pg,'10_Projects/주말에 볼 영상.md');assert c and 'type: project' in c and 'status: active' in c,c
     assert pg.inner_text('#pPath').startswith('프로젝트');close(pg)
 def t_rename(pg):
-    view(pg,'모든 노트');open_row(pg,'테마 비교 메모');pg.fill('#card .ctitle','테마: A/B 비교');pg.press('#card .ctitle','Enter');idle(pg,600)
+    view(pg,'노트');open_row(pg,'테마 비교 메모');pg.fill('#card .ctitle','테마: A/B 비교');pg.press('#card .ctitle','Enter');idle(pg,600)
     c=fget(pg,'20_Notes/테마 A B 비교.md');assert c and '# 테마: A/B 비교' in c,files(pg)
     assert '20_Notes/테마 비교 메모.md' not in files(pg);close(pg)
     # 프로젝트 이름을 바꾸면 속한 노트·할 일의 project 도 따라간다
@@ -127,7 +129,7 @@ def t_project(pg):
     c=fget(pg,'90_Archive/집 정리.md');assert 'archived: true' in c and 'status: done' in c,c
     assert '90_Archive/비용 비교.md' in f and '11_Todos/업체 견적 받기.md' in f and 'project' not in fget(pg,'11_Todos/업체 견적 받기.md')
     assert 'project: "[[집 정리]]"' in fget(pg,'20_Notes/수납장 문서 요약.md');close(pg)
-    view(pg,'모든 노트');open_row(pg,'수납장 문서 요약');assert '(보관됨)' in pg.inner_text('#card [data-chip=project]');close(pg)
+    view(pg,'노트');open_row(pg,'수납장 문서 요약');assert '(보관됨)' in pg.inner_text('#card [data-chip=project]');close(pg)
 def t_project_restore(pg):
     # 미완료 할 일을 함께 보관한 프로젝트를 되살리면: 다시 진행 상태, 카드에서 '보관됨'이 사라지고, 그 할 일도 돌아온다
     n=pg.evaluate("createNote({type:'project',title:'임시 프로젝트',quiet:true}).then(()=>createNote({type:'todo',title:'임시 할 일',project:'임시 프로젝트'})).then(()=>1)");idle(pg)
@@ -158,9 +160,7 @@ def t_docs_rename(pg):
     assert '20_Notes/버리는 것부터.md' in files(pg) and '20_Notes/정리는 버리는 것부터.md' not in files(pg),files(pg)
     assert pg.inner_text('#pPath')=='20_Notes/버리는 것부터.md' and pg.input_value('#pTitle')=='버리는 것부터'
     assert pg.locator('.tree .tn[aria-current=true]').count()==1
-    # 데일리 노트는 제목을 바꿔도 파일 이름이 그대로
-    daily=[p for p in files(pg) if p.startswith('01_Daily/')][0];pg.click('.tree .tn >> nth=0');idle(pg)
-    pg.fill('#pTitle','오늘 기록');pg.click('#pSave');idle(pg,600);assert daily in files(pg) and '# 오늘 기록' in fget(pg,daily)
+    pg.click('.tree .tn >> nth=0');idle(pg)
     # 저장 안 한 변경이 있으면 묻는다
     pg.fill('#pBody','임시');tab(pg,'노트');assert pg.is_visible('#ask.on') or pg.is_visible('#askOk');pg.click('#askOk');idle(pg)
 def t_links(pg):
@@ -177,7 +177,7 @@ def t_links(pg):
     pg.click('#pSave');idle(pg);assert '[[버리는 것부터]]' in fget(pg,'20_Notes/수납 아이디어.md')
     pg.keyboard.press('Control+k');idle(pg,200);assert pg.get_attribute('#palInput','placeholder')!='링크할 노트 검색' and '명령' in pg.inner_text('#palList') or True;pg.keyboard.press('Escape')
     # 카드 설명: 링크 버튼과 자동완성
-    tab(pg,'노트');view(pg,'모든 노트');open_row(pg,'수납장 문서 요약');pg.click('#card section h3 button:text-is("편집")');idle(pg,200)
+    tab(pg,'노트');view(pg,'노트');open_row(pg,'수납장 문서 요약');pg.click('#card section h3 button:text-is("편집")');idle(pg,200)
     ta='#card .dedit textarea';pg.click(ta);pg.keyboard.press('Control+End');pg.type(ta,'\n[[수납 아');idle(pg,200);assert pg.is_visible('#pAc.on')
     pg.click('#pAc button >> nth=0');idle(pg,200);assert pg.input_value(ta).endswith('[[수납 아이디어]]'),pg.input_value(ta)
     pg.click('#card .dedit button:text-is("링크")');idle(pg,200);pg.fill('#palInput','옛 메모');idle(pg,200);pg.click('#palList button >> nth=0');idle(pg,200)
@@ -194,7 +194,7 @@ def t_unit(pg):
     assert ev("fileNameOf('.env 설정?')")=='env 설정' and ev("fileNameOf('a/b: c')")=='a b c' and ev("fileNameOf('??')")=='메모'
     assert ev("parseFM(buildFM({type:'todo',project:'[[집: 정리]]',label:['a','b'],archived:true})).fm")=={'type':'todo','project':'[[집: 정리]]','label':['a','b'],'archived':True}
     assert ev("typeOf({fm:{type:'resource'},folder:'30_Resources'})")=='note' and ev("typeOf({fm:{type:'inbox',label:'todo'},folder:'00_Inbox'})")=='todo'
-    assert ev("typeOf({fm:{},folder:'10_Projects'})")=='project' and ev("typeOf({fm:{type:'weekly'},folder:'01_Daily'})")=='daily'
+    assert ev("typeOf({fm:{},folder:'10_Projects'})")=='project' and ev("typeOf({fm:{type:'weekly'},folder:'01_Daily'})")=='note' and ev("typeOf({fm:{type:'daily'},folder:'01_Daily'})")=='note'
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
@@ -218,9 +218,9 @@ with sync_playwright() as p:
     try:
         assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰에서 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'09-mobile-inbox.png'))
-        for vn in ['모든 노트','읽을 것','보관함','프로젝트']:
+        for vn in ['노트','보관함','프로젝트']:
             view(m,vn);assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 '+vn+' 보기 가로 스크롤'
-        view(m,'정리 안 된 노트')
+        view(m,'정리 전')
         tab(m,'할 일');assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 할 일 탭 가로 스크롤'
         m.fill('.tdadd input[type=text]','폰에서 추가');m.click('.tdadd .addbtn');idle(m);assert '11_Todos/폰에서 추가.md' in files(m),'추가 버튼으로 할 일이 안 만들어짐'
         m.fill('.tdadd input[type=text]','폰 엔터');m.press('.tdadd input[type=text]','Enter');idle(m);assert '11_Todos/폰 엔터.md' in files(m)
