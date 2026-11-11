@@ -213,11 +213,14 @@ with sync_playwright() as p:
                     if pg.is_visible(sel):pg.click(sel,timeout=500)
                 except Exception:pass
     # 폰 화면
-    m=b.new_page(viewport={'width':390,'height':800});m.on('pageerror',lambda e:errs.append('mobile: '+str(e)))
+    m=b.new_page(viewport={'width':360,'height':760});m.on('pageerror',lambda e:errs.append('mobile: '+str(e)))
     m.goto(MOCK);m.wait_for_selector('#views button');idle(m,900)
     try:
         assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰에서 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'09-mobile-inbox.png'))
+        for vn in ['모든 노트','읽을 것','보관함','프로젝트']:
+            view(m,vn);assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 '+vn+' 보기 가로 스크롤'
+        view(m,'정리 안 된 노트')
         tab(m,'할 일');assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 할 일 탭 가로 스크롤'
         m.fill('.tdadd input[type=text]','폰에서 추가');m.click('.tdadd .addbtn');idle(m);assert '11_Todos/폰에서 추가.md' in files(m),'추가 버튼으로 할 일이 안 만들어짐'
         m.fill('.tdadd input[type=text]','폰 엔터');m.press('.tdadd input[type=text]','Enter');idle(m);assert '11_Todos/폰 엔터.md' in files(m)

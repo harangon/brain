@@ -277,6 +277,7 @@ td input.inl{width:118px}
 .evbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
 .evbar input{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg2);font-size:13px;min-width:160px}
 .evnote{font-size:12px;color:var(--fg3)}
+.mmeta{display:none}
 .sechd{display:flex;align-items:baseline;gap:8px;padding:12px 4px 6px;flex-wrap:wrap}.sechd h2{margin:0;font-size:14px;font-weight:600}.sechd span{color:var(--fg3);font-size:12.5px}
 .sug{border:1px dashed var(--line2);border-radius:12px;padding:1px 9px;font-size:12px;color:var(--accent);background:var(--bg);margin-right:4px}.sug:hover{background:var(--bg2)}
 .sugl{font-size:11px;color:var(--fg3)}
@@ -401,6 +402,10 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   .col{flex-basis:220px}
   .hide-m{display:none}
   .sugl{display:none}
+  .mmeta{display:block;font-size:12px;color:var(--fg3);margin-top:2px}.mmeta.late{color:var(--danger)}
+  table{table-layout:fixed;width:100%}th.ck,td.ck{width:34px}td.t{overflow-wrap:anywhere}
+  table th:nth-last-child(-n+3):not(.hide-m),table td:nth-last-child(-n+3):not(.hide-m):not(.t){width:27%}
+  td select.inl,td .inl{max-width:100%}
   .bar .sp{display:none}
   .tdchips small{margin-left:4px}
   .tdmain{min-width:0;max-width:100%}
@@ -1038,6 +1043,10 @@ function renderInbox(v,m){
   const recent=notes.filter(n=>typeOf(n)==='note'&&!isArchived(n)&&!isLoose(n)).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1).slice(0,5);
   if(recent.length&&!state.q){m.append(el('div',{class:'sechd',style:'padding-top:22px'},el('h2',{},'최근 정리된 노트'),el('span',{},'참고용 — "모든 노트" 보기에서 전체를 봅니다')));renderTable(recent,m,'recent');}
 }
+/* 폰에서 숨긴 칸(종류·상태·마감)을 제목 아래 한 줄로 */
+function mmeta(n,showType){const ty=typeOf(n);const st=ty==='project'?statusOpt(n.fm.status):null;
+  const parts=[showType&&ty!=='note'?TYPE_NAME[ty]:'',st?st.name:'',n.fm.due?fmtDue(n.fm.due)+(isLate(n)?' · 지남':''):''].filter(Boolean);
+  return parts.length?el('div',{class:'mmeta'+(isLate(n)?' late':'')},parts.join(' · ')):'';}
 function renderTable(v,m,mode=''){
   const slim=mode==='inbox'||mode==='recent';const showType=!slim&&!state.type;const showStatus=!state.type||state.type==='project';
   const cols=slim?[['title','제목'],['project','프로젝트'],['label','라벨'],['updated','수정']]
@@ -1046,15 +1055,15 @@ function renderTable(v,m,mode=''){
   if(mode!=='recent')bulkBar(m);
   const allSel=v.length&&v.every(n=>selected.has(n.path));
   const thead=el('tr',{},el('th',{class:'ck'},mode==='recent'?'':el('input',{type:'checkbox','aria-label':'전체 선택',checked:allSel?'':null,onchange:e=>{for(const n of v){if(typeOf(n)==='todo')continue;e.target.checked?selected.add(n.path):selected.delete(n.path);}render();}})),
-    ...cols.map(([k,t])=>el('th',{class:k==='updated'?'hide-m':''},mode==='recent'?t:el('button',{onclick:()=>{const d=sk===k?-sd:(k==='updated'?-1:1);state.sort=`${k}:${d}`;render();}},t,sk===k?(+sd>0?' ↑':' ↓'):''))));
+    ...cols.map(([k,t])=>el('th',{class:['updated','type','status','due'].includes(k)||!['title','project','label'].includes(k)?'hide-m':''},mode==='recent'?t:el('button',{onclick:()=>{const d=sk===k?-sd:(k==='updated'?-1:1);state.sort=`${k}:${d}`;render();}},t,sk===k?(+sd>0?' ↑':' ↓'):''))));
   const rows=v.map(n=>{const ty=typeOf(n);return el('tr',{'data-path':n.path},
     el('td',{class:'ck'},ty==='todo'?doneBox(n):mode==='recent'?'':el('input',{type:'checkbox','aria-label':'선택',checked:selected.has(n.path)?'':null,onchange:e=>{e.target.checked?selected.add(n.path):selected.delete(n.path);render();}})),
-    el('td',{class:'t'+(n.fm.status==='done'&&ty==='todo'?' isdone':'')},el('button',{onclick:()=>openNote(n)},n.title),progEl(n),mode==='inbox'?el('button',{class:'btn sm keep',title:'프로젝트·라벨 없이 그대로 둡니다',onclick:()=>keepAsIs(n)},'이대로 두기'):''),
-    ...(showType?[el('td',{},TYPE_NAME[ty])]:[]),
+    el('td',{class:'t'+(n.fm.status==='done'&&ty==='todo'?' isdone':'')},el('button',{onclick:()=>openNote(n)},n.title),progEl(n),slim?'':mmeta(n,showType),mode==='inbox'?el('button',{class:'btn sm keep',title:'프로젝트·라벨 없이 그대로 둡니다',onclick:()=>keepAsIs(n)},'이대로 두기'):''),
+    ...(showType?[el('td',{class:'hide-m'},TYPE_NAME[ty])]:[]),
     el('td',{},inlineProject(n)),
     ...(slim?[el('td',{},inlineLabelsSug(n))]:[
-      ...(!showStatus?[]:[el('td',{},ty==='project'?inlineSelect(n,'status',config.statuses):ty==='todo'&&n.fm.status==='done'?tagEl(statusOpt('done'),'완료'):'')]),
-      el('td',{},inlineLabelsSug(n)),el('td',{},ty==='daily'?'':inlineDate(n)),
+      ...(!showStatus?[]:[el('td',{class:'hide-m'},ty==='project'?inlineSelect(n,'status',config.statuses):ty==='todo'&&n.fm.status==='done'?tagEl(statusOpt('done'),'완료'):'')]),
+      el('td',{},inlineLabelsSug(n)),el('td',{class:'hide-m'},ty==='daily'?'':inlineDate(n)),
       ...(config.props||[]).map(pr=>el('td',{class:'hide-m'},inlineProp(n,pr)))]),
     el('td',{class:'hide-m'},String(val(n,'updated')).slice(slim?5:0)));});
   m.append(el('table',{},el('thead',{},thead),el('tbody',{},...rows)));
