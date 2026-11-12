@@ -9,7 +9,7 @@ def fget(pg,p):return pg.evaluate('p=>__FILES[p]',p)
 def idle(pg,ms=350):pg.wait_for_timeout(ms)
 def view(pg,name):
     if name=='프로젝트':return tab(pg,'프로젝트')
-    if not pg.is_visible('#subtabs'):tab(pg,'노트')
+    if not pg.is_visible('#subtabs'):tab(pg,'카드')
 def proj(pg,name):
     tab(pg,'프로젝트')
     if pg.locator(f'.pbarx button[data-p="{name}"]').count():pg.click(f'.pbarx button[data-p="{name}"]')
@@ -38,43 +38,46 @@ def shot(pg,name):
 
 def t_load(pg):
     f=files(pg)
-    assert '20_Notes/옛 메모.md' in f and '00_Inbox/옛 메모.md' not in f,'옛 Inbox 노트가 20_Notes 로 안 옮겨짐'
-    assert '20_Notes/옛 자료.md' in f and '30_Resources/옛 자료.md' not in f
+    assert '20_Cards/옛 메모.md' in f and '00_Inbox/옛 메모.md' not in f,'옛 Inbox 노트가 20_Cards 로 안 옮겨짐'
+    assert '20_Cards/옛 자료.md' in f and '30_Resources/옛 자료.md' not in f
     assert pg.evaluate("getComputedStyle(document.querySelector('#btnSettings')).width")=='30px' and pg.evaluate("getComputedStyle(document.querySelector('#q')).borderRadius")!='0px','머리줄 스타일이 빠짐'
     # 노트 탭은 노트 목록 하나: 보기 칩 없음, 옆에 프로젝트·라벨 목록, 옛 데일리도 노트로
-    r=rows(pg);daily=[x for x in r if x.startswith('20')];assert len(daily)==1 and f'20_Notes/{daily[0]}.md' in f and not any(p.startswith('01_Daily/') for p in f)
-    assert set(r)-set(daily)=={'수납 아이디어','구조를 단순하게 가는 이유','주말에 볼 영상','옛 메모','수납장 문서 요약','정리는 버리는 것부터','테마 비교 메모','옛 자료'},r
+    r=rows(pg);daily=[x for x in r if x.startswith('20')];assert len(daily)==1 and f'20_Cards/{daily[0]}.md' in f and not any(p.startswith('01_Daily/') for p in f)
+    assert '20_Cards/2026-11-01-옛-할-일.md' in f and not any(p.startswith(('11_Todos/','20_Notes/')) for p in f),'옛 할 일 폴더가 20_Cards 로 안 옮겨짐'
+    # 카드 탭에는 할 일을 포함한 모든 카드
+    assert set(r)-set(daily)=={'수납 아이디어','구조를 단순하게 가는 이유','주말에 볼 영상','옛 메모','수납장 문서 요약','정리는 버리는 것부터','테마 비교 메모','옛 자료','창고 치수 재기','업체 견적 받기','버릴 것 목록','비용 비교','건강검진 예약','우유 사기','도메인 연장','책 반납','옛 할 일'},r
+    assert pg.inner_text('.tabs:not(.sub)').split()==['카드','프로젝트','할','일','일정']
     assert not pg.is_visible('#views') and pg.locator('.nside').count()==1 and '정리 전' not in pg.inner_text('body') and '이대로 두기' not in pg.inner_text('body')
     assert pg.get_attribute('#quickText','placeholder')=='메모 입력'
     shot(pg,'01-notes')
 def t_suggest(pg):
-    pg.click('tr[data-path="20_Notes/수납 아이디어.md"] .sug');idle(pg)
-    c=fget(pg,'20_Notes/수납 아이디어.md');assert 'project: "[[집 정리]]"' in c and 'suggest-project' not in c,c
-    pg.click('tr[data-path="20_Notes/구조를 단순하게 가는 이유.md"] .sug');idle(pg)
-    c=fget(pg,'20_Notes/구조를 단순하게 가는 이유.md');assert 'label: mine' in c and 'suggest-label' not in c,c
+    pg.click('tr[data-path="20_Cards/수납 아이디어.md"] .sug');idle(pg)
+    c=fget(pg,'20_Cards/수납 아이디어.md');assert 'project: "[[집 정리]]"' in c and 'suggest-project' not in c,c
+    pg.click('tr[data-path="20_Cards/구조를 단순하게 가는 이유.md"] .sug');idle(pg)
+    c=fget(pg,'20_Cards/구조를 단순하게 가는 이유.md');assert 'label: mine' in c and 'suggest-label' not in c,c
 def t_quick(pg):
     pg.fill('#quickText','새 메모 / 테스트?');pg.press('#quickText','Enter');idle(pg)
-    c=fget(pg,'20_Notes/새 메모 테스트.md');assert c and '# 새 메모 / 테스트?' in c and 'type: note' in c,c
+    c=fget(pg,'20_Cards/새 메모 테스트.md');assert c and '# 새 메모 / 테스트?' in c and 'type: card' in c,c
     assert '새 메모 / 테스트?' in rows(pg)
     pg.fill('#quickText','새 메모 / 테스트?');pg.press('#quickText','Enter');idle(pg)
-    assert any(p.startswith('20_Notes/새 메모 테스트 20') for p in files(pg)),'이름이 겹치면 날짜를 붙여야 함'
+    assert any(p.startswith('20_Cards/새 메모 테스트 20') for p in files(pg)),'이름이 겹치면 날짜를 붙여야 함'
 def t_views(pg):
-    view(pg,'노트');r=rows(pg);assert '수납장 문서 요약' in r and '집 정리' not in r and '우유 사기' not in r,r
+    view(pg,'노트');r=rows(pg);assert '수납장 문서 요약' in r and '집 정리' not in r and '우유 사기' in r,r
     st=pg.inner_text('.nside');assert '프로젝트 없음' in st and '집 정리' in st and '블로그 개편' in st and '라벨 없음' in st and '읽을 것' in st and '내 생각' in st,st
     # 옆 목록에서 프로젝트를 누르면 그 프로젝트의 노트만. 보기 칩은 그대로
-    side(pg,'project','집 정리');assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어'},rows(pg)
+    side(pg,'project','집 정리');assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어','창고 치수 재기','업체 견적 받기','버릴 것 목록','비용 비교'},rows(pg)
     assert pg.get_attribute('.nside button[data-v="집 정리"]','aria-pressed')=='true'
     # 메모는 보고 있는 프로젝트·라벨로 들어간다
     assert '집 정리에 저장' in pg.get_attribute('#quickText','placeholder')
-    pg.fill('#quickText','선반 치수');pg.press('#quickText','Enter');idle(pg);c=fget(pg,'20_Notes/선반 치수.md');assert c and 'project: "[[집 정리]]"' in c,c
+    pg.fill('#quickText','선반 치수');pg.press('#quickText','Enter');idle(pg);c=fget(pg,'20_Cards/선반 치수.md');assert c and 'project: "[[집 정리]]"' in c,c
     assert '선반 치수' in rows(pg);side(pg,'label','resource');assert '집 정리 · 자료에 저장' in pg.get_attribute('#quickText','placeholder')
-    pg.fill('#quickText','선반 자료');pg.press('#quickText','Enter');idle(pg);c=fget(pg,'20_Notes/선반 자료.md');assert 'label: resource' in c and '선반 자료' in rows(pg),c
+    pg.fill('#quickText','선반 자료');pg.press('#quickText','Enter');idle(pg);c=fget(pg,'20_Cards/선반 자료.md');assert 'label: resource' in c and '선반 자료' in rows(pg),c
     # 다시 누르면 풀린다
     side(pg,'label','resource');side(pg,'project','집 정리');assert pg.get_attribute('#quickText','placeholder')=='메모 입력' and '주말에 볼 영상' in rows(pg)
-    side(pg,'project','집 정리');assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어','선반 치수','선반 자료'},rows(pg)
+    side(pg,'project','집 정리');assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어','선반 치수','선반 자료','창고 치수 재기','업체 견적 받기','버릴 것 목록','비용 비교'},rows(pg)
     side(pg,'project','__none');side(pg,'label','__none');r=rows(pg);assert '주말에 볼 영상' in r and '정리는 버리는 것부터' not in r and '선반 치수' not in r,r
     side(pg,'project','');side(pg,'label','read');assert set(rows(pg))=={'수납장 문서 요약','옛 자료'},rows(pg)
-    side(pg,'label','idea');assert rows(pg)==[] and '해당하는 노트가 없습니다' in pg.inner_text('#main') and pg.locator('.nside').count()==1
+    side(pg,'label','idea');assert rows(pg)==[] and '해당하는 카드가 없습니다' in pg.inner_text('#main') and pg.locator('.nside').count()==1
     side(pg,'label','');assert '종류' not in pg.inner_text('#main thead')
     # 프로젝트 탭 홈: 프로젝트(보드) 고르기
     proj_home(pg);assert not pg.is_visible('#quick') and not pg.is_visible('#subtabs')
@@ -101,29 +104,29 @@ def t_views(pg):
     pg.click('.pbarx button[data-p="집 정리"]');idle(pg);assert '1/4' in pg.inner_text('.pbarx button[data-p="집 정리"]')
     assert pg.inner_text('.phead .ptitle')=='집 정리' and lists(pg)==['할 일','진행 중','완료']
     assert col(pg,'할 일')[:2]==['창고 치수 재기','업체 견적 받기'] and set(col(pg,'할 일')[2:])=={'버릴 것 목록','수납장 문서 요약','수납 아이디어','선반 치수','선반 자료'} and col(pg,'완료')==['비용 비교'] and col(pg,'진행 중')==[],col(pg,'할 일')
-    # 카드 추가: 할 일(Enter) / 노트(버튼)
+    # 카드 추가는 하나: 날짜를 적으면 할 일(체크 있음), 아니면 그냥 카드
     ti='.tlist[data-list="진행 중"] .cadd input';pg.fill(ti,'내일 창고 청소');pg.press(ti,'Enter');idle(pg)
-    c=fget(pg,'11_Todos/창고 청소.md');assert c and 'project: "[[집 정리]]"' in c and 'due: ' in c and 'list: 진행 중' in c and col(pg,'진행 중')==['창고 청소'],c
-    pg.fill(ti,'청소 업체 메모');pg.click('.tlist[data-list="진행 중"] .cadd button:text-is("노트")');idle(pg)
-    c=fget(pg,'20_Notes/청소 업체 메모.md');assert c and 'type: note' in c and 'list: 진행 중' in c and set(col(pg,'진행 중'))=={'창고 청소','청소 업체 메모'},c
+    c=fget(pg,'20_Cards/창고 청소.md');assert c and 'type: card' in c and 'project: "[[집 정리]]"' in c and 'due: ' in c and 'list: 진행 중' in c and col(pg,'진행 중')==['창고 청소'] and pg.locator('.tcard:has-text("창고 청소") .nd').count()==1,c
+    pg.fill(ti,'청소 업체 메모');pg.press(ti,'Enter');idle(pg);assert pg.locator('.tlist[data-list="진행 중"] .cadd button').count()==1 and pg.locator('.tcard:has-text("청소 업체 메모") .nd').count()==0
+    c=fget(pg,'20_Cards/청소 업체 메모.md');assert c and 'type: card' in c and 'todo' not in c and 'due' not in c and 'list: 진행 중' in c and set(col(pg,'진행 중'))=={'창고 청소','청소 업체 메모'},c
     # 체크하면 완료 줄로, 풀면 돌아온다
-    pg.click('.tcard:has-text("창고 청소") .nd');idle(pg);assert '창고 청소' in col(pg,'완료') and 'status: done' in fget(pg,'11_Todos/창고 청소.md')
+    pg.click('.tcard:has-text("창고 청소") .nd');idle(pg);assert '창고 청소' in col(pg,'완료') and 'status: done' in fget(pg,'20_Cards/창고 청소.md')
     # 끌어 옮기기: 줄 사이 (완료 줄에서 꺼내면 완료가 풀린다), 같은 줄 안 순서
-    drag(pg,'.tcard:has-text("창고 청소")','.tlist[data-list="진행 중"] .tcards');c=fget(pg,'11_Todos/창고 청소.md')
+    drag(pg,'.tcard:has-text("창고 청소")','.tlist[data-list="진행 중"] .tcards');c=fget(pg,'20_Cards/창고 청소.md')
     assert 'status' not in c and 'list: 진행 중' in c and '창고 청소' in col(pg,'진행 중') and '창고 청소' not in col(pg,'완료'),c
-    drag(pg,'.tcard:has-text("버릴 것 목록")','.tlist[data-list="완료"] .tcards');c=fget(pg,'11_Todos/버릴 것 목록.md');assert 'status: done' in c and '버릴 것 목록' in col(pg,'완료'),c
+    drag(pg,'.tcard:has-text("버릴 것 목록")','.tlist[data-list="완료"] .tcards');c=fget(pg,'20_Cards/버릴 것 목록.md');assert 'status: done' in c and '버릴 것 목록' in col(pg,'완료'),c
     drag(pg,'.tcard:has-text("업체 견적 받기")','.tcard:has-text("창고 치수 재기")',{'x':40,'y':4})
     assert col(pg,'할 일')[:2]==['업체 견적 받기','창고 치수 재기'],col(pg,'할 일')
-    drag(pg,'.tcard:has-text("수납 아이디어")','.tlist[data-list="진행 중"] .tcards');assert 'list: 진행 중' in fget(pg,'20_Notes/수납 아이디어.md') and '수납 아이디어' in col(pg,'진행 중')
+    drag(pg,'.tcard:has-text("수납 아이디어")','.tlist[data-list="진행 중"] .tcards');assert 'list: 진행 중' in fget(pg,'20_Cards/수납 아이디어.md') and '수납 아이디어' in col(pg,'진행 중')
     # 줄: 추가 · 이름 바꾸기 · 옮기기 · 삭제
     pg.fill('.tlist.addlist input','자료');pg.press('.tlist.addlist input','Enter');idle(pg);assert lists(pg)==['할 일','진행 중','완료','자료'] and 'lists: [할 일, 진행 중, 완료, 자료]' in fget(pg,'10_Projects/집 정리.md')
     pg.click('.tlist[data-list="자료"] .lm');pg.click('.menu.pop button:text-is("왼쪽으로")');idle(pg);assert lists(pg)==['할 일','진행 중','자료','완료']
     pg.click('.tlist[data-list="진행 중"] .lm');pg.click('.menu.pop button:text-is("이름 바꾸기")');pg.fill('#askField input','하는 중');ok(pg)
-    assert lists(pg)==['할 일','하는 중','자료','완료'] and 'list: 하는 중' in fget(pg,'11_Todos/창고 청소.md') and '창고 청소' in col(pg,'하는 중')
+    assert lists(pg)==['할 일','하는 중','자료','완료'] and 'list: 하는 중' in fget(pg,'20_Cards/창고 청소.md') and '창고 청소' in col(pg,'하는 중')
     pg.click('.tlist[data-list="하는 중"] .lm');pg.click('.menu.pop button:text-is("줄 삭제")');assert '할 일' in pg.inner_text('#askMsg');ok(pg)
-    assert lists(pg)==['할 일','자료','완료'] and '창고 청소' in col(pg,'할 일') and 'list: 할 일' in fget(pg,'11_Todos/창고 청소.md')
+    assert lists(pg)==['할 일','자료','완료'] and '창고 청소' in col(pg,'할 일') and 'list: 할 일' in fget(pg,'20_Cards/창고 청소.md')
     pg.click('.tcard:has-text("업체 견적 받기")');idle(pg);assert pg.inner_text('#pPath').startswith('할 일');close(pg)
-    pg.click('.tcard:has-text("버릴 것 목록") .nd');idle(pg);assert '버릴 것 목록' in col(pg,'할 일') and 'status' not in fget(pg,'11_Todos/버릴 것 목록.md')
+    pg.click('.tcard:has-text("버릴 것 목록") .nd');idle(pg);assert '버릴 것 목록' in col(pg,'할 일') and 'status' not in fget(pg,'20_Cards/버릴 것 목록.md')
     pg.click('.tcard:has-text("창고 청소") .nd');idle(pg)
     shot(pg,'02-project-board')
     view(pg,'노트');pg.click('#subtabs button:has-text("보드")');idle(pg)
@@ -135,12 +138,12 @@ def t_views(pg):
 def t_archive_view(pg):
     # 보관은 탭마다: 노트 탭 "보관한 노트", 할 일 탭 "보관된 할 일", 프로젝트 탭 "끝낸 프로젝트"
     view(pg,'노트');assert '옛 노트' not in rows(pg);pg.click('[data-sec=narch] .hd');idle(pg);pg.click('[data-sec=narch] .trow button:text-is("옛 노트")');idle(pg)
-    act(pg,'되살리기');idle(pg,500);assert '20_Notes/옛 노트.md' in files(pg) and 'archived' not in fget(pg,'20_Notes/옛 노트.md');close(pg);assert '옛 노트' in rows(pg)
+    act(pg,'되살리기');idle(pg,500);assert '20_Cards/옛 노트.md' in files(pg) and 'archived' not in fget(pg,'20_Cards/옛 노트.md');close(pg);assert '옛 노트' in rows(pg)
     tab(pg,'할 일');pg.click('[data-sec=arch] .hd');idle(pg);pg.click('[data-sec=arch] .trow button:text-is("끝난 일")');idle(pg)
     assert '보관됨' in pg.inner_text('#pPath');act(pg,'되살리기');idle(pg,500)
-    c=fget(pg,'11_Todos/끝난 일.md');assert c and 'archived' not in c and 'label' not in c and 'type: todo' in c,c
+    c=fget(pg,'20_Cards/끝난 일.md');assert c and 'archived' not in c and 'label' not in c and 'todo: true' in c,c
     assert '90_Archive/끝난 일.md' not in files(pg);close(pg)
-    proj_home(pg);pg.click('[data-sec=parch] .hd');idle(pg);assert '옛 프로젝트' in pg.inner_text('[data-sec=parch]');pg.click('[data-sec=parch] .hd');idle(pg);tab(pg,'노트')
+    proj_home(pg);pg.click('[data-sec=parch] .hd');idle(pg);assert '옛 프로젝트' in pg.inner_text('[data-sec=parch]');pg.click('[data-sec=parch] .hd');idle(pg);tab(pg,'카드')
 def t_todo(pg):
     tab(pg,'할 일');side=pg.inner_text('.tdside')
     assert '프로젝트 없음' in side and '집 정리' in side and '2/5' in side,side
@@ -149,54 +152,59 @@ def t_todo(pg):
     assert pg.is_visible('[data-sec=todaylate]'),'다른 날짜를 볼 때 오늘·지연이 보여야 함'
     assert '프로젝트 없음' in pg.inner_text('.tdprev')
     pg.select_option('.tdadd select','집 정리');pg.press(inp,'Enter');idle(pg)
-    c=fget(pg,'11_Todos/벤더 견적.md');assert c and 'project: "[[집 정리]]"' in c and 'due: ' in c and 'label' not in c,c
+    c=fget(pg,'20_Cards/벤더 견적.md');assert c and 'project: "[[집 정리]]"' in c and 'due: ' in c and 'label' not in c,c
     assert '옛 할 일' in pg.inner_text('.tdmain') or True
     pg.click('.tdside button[data-key=""]');idle(pg);txt=pg.inner_text('.tdmain');assert '우유 사기' in txt and '업체 견적' not in txt
-    pg.fill(inp,'세탁소');pg.press(inp,'Enter');idle(pg);c=fget(pg,'11_Todos/세탁소.md');assert c and 'project' not in c,c
+    pg.fill(inp,'세탁소');pg.press(inp,'Enter');idle(pg);c=fget(pg,'20_Cards/세탁소.md');assert c and 'project' not in c,c
     pg.click('.tdside button[data-key="*"]');idle(pg)
     # 라벨로 거르기: 그 라벨의 할 일만, 새 할 일도 그 라벨로
     pg.click('.tdside button[data-label="work"]');idle(pg);txt=pg.inner_text('.tdmain');assert '건강검진 예약' in txt and '우유 사기' not in txt,txt
     assert '라벨 업무' in pg.inner_text('.tdprev') or True
-    pg.fill(inp,'회의록 정리');pg.press(inp,'Enter');idle(pg);c=fget(pg,'11_Todos/회의록 정리.md');assert c and 'label: work' in c,c
+    pg.fill(inp,'회의록 정리');pg.press(inp,'Enter');idle(pg);c=fget(pg,'20_Cards/회의록 정리.md');assert c and 'label: work' in c,c
     pg.click('.tdside button[data-label="work"]');idle(pg);assert '우유 사기' in pg.inner_text('.tdmain')
     pg.click('[data-sec=done] .hd');idle(pg);assert '주간 정리 때 보관' in pg.inner_text('[data-sec=done] .hd') and '비용 비교' in pg.inner_text('[data-sec=done]')
     # 완료 체크
-    pg.click('.tdtoday .trow:has-text("우유 사기") input[type=checkbox]');idle(pg);assert 'status: done' in fget(pg,'11_Todos/우유 사기.md')
+    pg.click('.tdtoday .trow:has-text("우유 사기") input[type=checkbox]');idle(pg);assert 'status: done' in fget(pg,'20_Cards/우유 사기.md')
     shot(pg,'04-todo')
     pg.click('.tdadd .chip[data-id=none]');idle(pg);assert not pg.is_visible('.tdtoday') and not pg.is_visible('[data-sec=todaylate]')
     pg.click('.tdadd .chip[data-id=today]');idle(pg)
 def t_convert(pg):
-    tab(pg,'노트');view(pg,'노트');open_row(pg,'주말에 볼 영상');shot(pg,'05-note-card')
-    act(pg,'할 일로 바꾸기');idle(pg,500)
-    c=fget(pg,'11_Todos/주말에 볼 영상.md');assert c and 'type: todo' in c and 'reviewed' not in c,c
-    assert '20_Notes/주말에 볼 영상.md' not in files(pg) and pg.inner_text('#pPath').startswith('할 일')
+    tab(pg,'카드');view(pg,'노트');open_row(pg,'주말에 볼 영상');shot(pg,'05-note-card')
+    # 카드 ↔ 할 일: 표시만 바뀌고 파일은 그대로
+    assert pg.inner_text('#pPath').startswith('카드') and pg.locator('#card .cdone').count()==0
+    act(pg,'할 일로');idle(pg,500)
+    c=fget(pg,'20_Cards/주말에 볼 영상.md');assert c and 'todo: true' in c and 'type: card' in c,c
+    assert pg.inner_text('#pPath').startswith('할 일')
     assert pg.locator('#card .cdone').count()==1
-    act(pg,'노트로 되돌리기');idle(pg,500);assert '20_Notes/주말에 볼 영상.md' in files(pg) and 'type: note' in fget(pg,'20_Notes/주말에 볼 영상.md')
-    act(pg,'할 일로 바꾸기');idle(pg,500);act(pg,'프로젝트로 키우기');ok(pg)
+    act(pg,'할 일 해제');idle(pg,500);c=fget(pg,'20_Cards/주말에 볼 영상.md');assert 'todo' not in c and pg.locator('#card .cdone').count()==0 and pg.inner_text('#pPath').startswith('카드'),c
+    # 날짜를 넣어도 할 일이 된다
+    pg.fill('#card .chip[title="마감"] input','2026-12-01');pg.dispatch_event('#card .chip[title="마감"] input','change');idle(pg,500);assert pg.inner_text('#pPath').startswith('할 일') and pg.locator('#card .cdone').count()==1
+    act(pg,'할 일 해제');idle(pg,500);assert 'due' not in fget(pg,'20_Cards/주말에 볼 영상.md')
+    act(pg,'프로젝트로 키우기');ok(pg)
     c=fget(pg,'10_Projects/주말에 볼 영상.md');assert c and 'type: project' in c and 'status: active' in c,c
     assert pg.inner_text('#pPath').startswith('프로젝트');close(pg)
 def t_rename(pg):
     view(pg,'노트');open_row(pg,'테마 비교 메모');pg.fill('#card .ctitle','테마: A/B 비교');pg.press('#card .ctitle','Enter');idle(pg,600)
-    c=fget(pg,'20_Notes/테마 A B 비교.md');assert c and '# 테마: A/B 비교' in c,files(pg)
-    assert '20_Notes/테마 비교 메모.md' not in files(pg);close(pg)
+    c=fget(pg,'20_Cards/테마 A B 비교.md');assert c and '# 테마: A/B 비교' in c,files(pg)
+    assert '20_Cards/테마 비교 메모.md' not in files(pg);close(pg)
     # 프로젝트 이름을 바꾸면 속한 노트·할 일의 project 도 따라간다
     proj_card(pg,'블로그 개편')
     pg.fill('#card .ctitle','블로그 새단장');pg.press('#card .ctitle','Enter');idle(pg,900)
     assert '10_Projects/블로그 새단장.md' in files(pg),files(pg)
-    assert 'project: "[[블로그 새단장]]"' in fget(pg,'11_Todos/도메인 연장.md') and 'project: "[[블로그 새단장]]"' in fget(pg,'20_Notes/테마 A B 비교.md');close(pg)
+    assert 'project: "[[블로그 새단장]]"' in fget(pg,'20_Cards/도메인 연장.md') and 'project: "[[블로그 새단장]]"' in fget(pg,'20_Cards/테마 A B 비교.md');close(pg)
 def t_project(pg):
     proj_card(pg,'집 정리')
     card=pg.inner_text('#card');assert '수납장 문서 요약' in card and '창고 치수 재기' in card and '이 프로젝트 노트의 변경 기록' in card,card
     shot(pg,'06-project-card')
-    pg.click('#card button:text-is("+ 기존 노트 넣기")');idle(pg);pg.select_option('#askField select',label='정리는 버리는 것부터');ok(pg)
-    assert 'project: "[[집 정리]]"' in fget(pg,'20_Notes/정리는 버리는 것부터.md') and '정리는 버리는 것부터' in pg.inner_text('#card [data-sec=notes]')
+    pg.click('#card button:text-is("+ 기존 카드 넣기")');idle(pg);pg.select_option('#askField select',label='정리는 버리는 것부터');ok(pg)
+    assert 'project: "[[집 정리]]"' in fget(pg,'20_Cards/정리는 버리는 것부터.md') and '정리는 버리는 것부터' in pg.inner_text('#card [data-sec=notes]')
     pg.fill('#card .cl .add input[aria-label="할 일 추가"]','내일 박스 사기');pg.press('#card .cl .add input[aria-label="할 일 추가"]','Enter');idle(pg)
-    assert 'project: "[[집 정리]]"' in fget(pg,'11_Todos/박스 사기.md')
+    assert 'project: "[[집 정리]]"' in fget(pg,'20_Cards/박스 사기.md')
     act(pg,'프로젝트 끝내기');assert '남은 할 일' in pg.inner_text('#askMsg');pg.select_option('#askField select','free');ok(pg);idle(pg,900)
     f=files(pg);assert '90_Archive/집 정리.md' in f and '10_Projects/집 정리.md' not in f,f
     c=fget(pg,'90_Archive/집 정리.md');assert 'archived: true' in c and 'status: done' in c,c
-    assert '90_Archive/비용 비교.md' in f and '11_Todos/업체 견적 받기.md' in f and 'project' not in fget(pg,'11_Todos/업체 견적 받기.md')
-    assert 'project: "[[집 정리]]"' in fget(pg,'20_Notes/수납장 문서 요약.md');close(pg)
+    assert '90_Archive/비용 비교.md' in f and '20_Cards/업체 견적 받기.md' in f and 'project' not in fget(pg,'20_Cards/업체 견적 받기.md')
+    assert 'project: "[[집 정리]]"' in fget(pg,'20_Cards/수납장 문서 요약.md');close(pg)
     view(pg,'노트');open_row(pg,'수납장 문서 요약');assert '(보관됨)' in pg.inner_text('#card [data-chip=project]');close(pg)
 def t_project_restore(pg):
     # 미완료 할 일을 함께 보관한 프로젝트를 되살리면: 다시 진행 상태, 카드에서 '보관됨'이 사라지고, 그 할 일도 돌아온다
@@ -208,11 +216,11 @@ def t_project_restore(pg):
     act(pg,'되살리기');idle(pg,1200)
     c=fget(pg,'10_Projects/임시 프로젝트.md');assert c and 'status: active' in c and 'archived' not in c,c
     assert '보관됨' not in pg.inner_text('#card .chiprow') and '프로젝트 끝내기' in pg.inner_text('#card .actions')
-    assert '11_Todos/임시 할 일.md' in files(pg) and 'archived' not in fget(pg,'11_Todos/임시 할 일.md') and '임시 할 일' in pg.inner_text('#card')
-    close(pg);tab(pg,'할 일');assert '임시 프로젝트' in pg.inner_text('.tdside');tab(pg,'노트')
+    assert '20_Cards/임시 할 일.md' in files(pg) and 'archived' not in fget(pg,'20_Cards/임시 할 일.md') and '임시 할 일' in pg.inner_text('#card')
+    close(pg);tab(pg,'할 일');assert '임시 프로젝트' in pg.inner_text('.tdside');tab(pg,'카드')
 def t_delete_project(pg):
     proj_card(pg,'블로그 새단장');pg.click('#card .actions .danger');assert '프로젝트 없음' in pg.inner_text('#askMsg');ok(pg);idle(pg,600)
-    assert '10_Projects/블로그 새단장.md' not in files(pg) and 'project' not in fget(pg,'11_Todos/도메인 연장.md')
+    assert '10_Projects/블로그 새단장.md' not in files(pg) and 'project' not in fget(pg,'20_Cards/도메인 연장.md')
     proj(pg,'집 정리') if False else tab(pg,'프로젝트');pg.click('#projNew');pg.fill('#askField input','새 프로젝트');ok(pg);idle(pg,400);c=fget(pg,'10_Projects/새 프로젝트.md');assert c and 'type: project' in c and 'status: active' in c,c
     assert pg.inner_text('.phead .ptitle')=='새 프로젝트' and lists(pg)==['할 일','진행 중','완료'] and col(pg,'할 일')==[]
 def t_misc(pg):
@@ -223,19 +231,19 @@ def t_misc(pg):
     assert pg.locator('.tabs:not(.sub) button').count()==4 and pg.locator('#btnReload').count()==0 and pg.eval_on_selector_all('header .icon','e=>e.map(x=>x.id)')[:2]==['btnDocs','btnPalette']
     pg.click('#btnDocs');idle(pg);assert pg.is_visible('.tree') and pg.get_attribute('#btnDocs','aria-pressed')=='true';pg.click('#btnDocs');idle(pg);assert pg.locator('.calgrid .day').count()==42 and pg.get_attribute('#btnDocs','aria-pressed')=='false'
     tab(pg,'문서');assert not pg.is_visible('#quick') and pg.locator('.nside').count()==0,'문서 탭에는 메모 입력·옆 목록이 없어야 함'
-    tree=pg.inner_text('.tree');assert 'Notes' in tree and 'Todos' in tree and 'Inbox' not in tree,tree
-    pg.click('.tree .tn:has-text("수납 아이디어")');idle(pg);assert pg.input_value('#pTitle')=='수납 아이디어' and pg.inner_text('#pPath')=='20_Notes/수납 아이디어.md'
-    pg.fill('#pBody','본문 수정');pg.click('#pSave');idle(pg);assert '본문 수정' in fget(pg,'20_Notes/수납 아이디어.md');shot(pg,'08-docs')
+    tree=pg.inner_text('.tree');assert 'Cards' in tree and 'Projects' in tree and 'Todos' not in tree and 'Notes' not in tree and 'Inbox' not in tree,tree
+    pg.click('.tree .tn:has-text("수납 아이디어")');idle(pg);assert pg.input_value('#pTitle')=='수납 아이디어' and pg.inner_text('#pPath')=='20_Cards/수납 아이디어.md'
+    pg.fill('#pBody','본문 수정');pg.click('#pSave');idle(pg);assert '본문 수정' in fget(pg,'20_Cards/수납 아이디어.md');shot(pg,'08-docs')
     pg.keyboard.press('Control+k');idle(pg,200);pg.fill('#palInput','>새로');idle(pg,200);assert pg.locator('#palList button').count()>=4;pg.keyboard.press('Escape')
 def t_docs_rename(pg):
     tab(pg,'문서');pg.click('.tree .tn:has-text("정리는 버리는 것부터")');idle(pg)
     pg.fill('#pTitle','버리는 것부터');pg.click('#pSave');idle(pg,700)
-    assert '20_Notes/버리는 것부터.md' in files(pg) and '20_Notes/정리는 버리는 것부터.md' not in files(pg),files(pg)
-    assert pg.inner_text('#pPath')=='20_Notes/버리는 것부터.md' and pg.input_value('#pTitle')=='버리는 것부터'
+    assert '20_Cards/버리는 것부터.md' in files(pg) and '20_Cards/정리는 버리는 것부터.md' not in files(pg),files(pg)
+    assert pg.inner_text('#pPath')=='20_Cards/버리는 것부터.md' and pg.input_value('#pTitle')=='버리는 것부터'
     assert pg.locator('.tree .tn[aria-current=true]').count()==1
     pg.click('.tree .tn >> nth=0');idle(pg)
     # 저장 안 한 변경이 있으면 묻는다
-    pg.fill('#pBody','임시');tab(pg,'노트');assert pg.is_visible('#ask.on') or pg.is_visible('#askOk');pg.click('#askOk');idle(pg)
+    pg.fill('#pBody','임시');tab(pg,'카드');assert pg.is_visible('#ask.on') or pg.is_visible('#askOk');pg.click('#askOk');idle(pg)
 def t_links(pg):
     # 문서 편집기: [[ 자동완성 — 키보드 Enter, 폰 키보드의 줄바꿈(beforeinput), 링크 버튼
     tab(pg,'문서');pg.click('.tree .tn:has-text("수납 아이디어")');idle(pg)
@@ -247,15 +255,15 @@ def t_links(pg):
     pg.click('#pLink');idle(pg,200);assert pg.get_attribute('#palInput','placeholder')=='링크할 노트 검색'
     pg.fill('#palInput','버리는');idle(pg,200);assert pg.locator('#palList button').count()==1;pg.click('#palList button');idle(pg,200)
     assert pg.input_value('#pBody').endswith('[[옛 자료]][[버리는 것부터]]'),pg.input_value('#pBody')
-    pg.click('#pSave');idle(pg);assert '[[버리는 것부터]]' in fget(pg,'20_Notes/수납 아이디어.md')
+    pg.click('#pSave');idle(pg);assert '[[버리는 것부터]]' in fget(pg,'20_Cards/수납 아이디어.md')
     pg.keyboard.press('Control+k');idle(pg,200);assert pg.get_attribute('#palInput','placeholder')!='링크할 노트 검색' and '명령' in pg.inner_text('#palList') or True;pg.keyboard.press('Escape')
     # 카드 설명: 링크 버튼과 자동완성
-    tab(pg,'노트');view(pg,'노트');open_row(pg,'수납장 문서 요약');pg.click('#card section h3 button:text-is("편집")');idle(pg,200)
+    tab(pg,'카드');view(pg,'노트');open_row(pg,'수납장 문서 요약');pg.click('#card section h3 button:text-is("편집")');idle(pg,200)
     ta='#card .dedit textarea';pg.click(ta);pg.keyboard.press('Control+End');pg.type(ta,'\n[[수납 아');idle(pg,200);assert pg.is_visible('#pAc.on')
     pg.click('#pAc button >> nth=0');idle(pg,200);assert pg.input_value(ta).endswith('[[수납 아이디어]]'),pg.input_value(ta)
     pg.click('#card .dedit button:text-is("링크")');idle(pg,200);pg.fill('#palInput','옛 메모');idle(pg,200);pg.click('#palList button >> nth=0');idle(pg,200)
     assert pg.input_value(ta).endswith('[[수납 아이디어]][[옛 메모]]'),pg.input_value(ta)
-    pg.click('#card .dedit button:text-is("저장")');idle(pg);assert '[[옛 메모]]' in fget(pg,'20_Notes/수납장 문서 요약.md') and '옛 메모' in pg.inner_text('#card');close(pg)
+    pg.click('#card .dedit button:text-is("저장")');idle(pg);assert '[[옛 메모]]' in fget(pg,'20_Cards/수납장 문서 요약.md') and '옛 메모' in pg.inner_text('#card');close(pg)
 def t_settings(pg):
     pg.click('#btnSettings');idle(pg,200);tabs=pg.inner_text('#settings .mh');assert '저장한 보기' not in tabs and '뷰' not in pg.inner_text('#settings')
     pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
@@ -263,16 +271,20 @@ def t_settings(pg):
     pg.click('#sCancel');idle(pg,200)
 def t_offline(pg):
     tab(pg,'할 일');pg.evaluate('window.__OFFLINE=true');inp='.tdadd input[type=text]'
-    pg.fill(inp,'오프라인 할 일');pg.press(inp,'Enter');idle(pg);assert '오프라인 할 일' in pg.inner_text('.tdmain') and '11_Todos/오프라인 할 일.md' not in files(pg)
+    pg.fill(inp,'오프라인 할 일');pg.press(inp,'Enter');idle(pg);assert '오프라인 할 일' in pg.inner_text('.tdmain') and '20_Cards/오프라인 할 일.md' not in files(pg)
     assert pg.is_visible('#qbadge');pg.evaluate('window.__OFFLINE=false;queue.flush()');idle(pg,600)
-    assert '11_Todos/오프라인 할 일.md' in files(pg) and not pg.is_visible('#qbadge')
+    assert '20_Cards/오프라인 할 일.md' in files(pg) and not pg.is_visible('#qbadge')
 
 def t_unit(pg):
     ev=pg.evaluate
     assert ev("fileNameOf('.env 설정?')")=='env 설정' and ev("fileNameOf('a/b: c')")=='a b c' and ev("fileNameOf('??')")=='메모'
     assert ev("parseFM(buildFM({type:'todo',project:'[[집: 정리]]',label:['a','b'],archived:true})).fm")=={'type':'todo','project':'[[집: 정리]]','label':['a','b'],'archived':True}
-    assert ev("typeOf({fm:{type:'resource'},folder:'30_Resources'})")=='note' and ev("typeOf({fm:{type:'inbox',label:'todo'},folder:'00_Inbox'})")=='todo'
-    assert ev("typeOf({fm:{},folder:'10_Projects'})")=='project' and ev("typeOf({fm:{type:'weekly'},folder:'01_Daily'})")=='note' and ev("typeOf({fm:{type:'daily'},folder:'01_Daily'})")=='note'
+    assert ev("typeOf({fm:{type:'resource'},folder:'30_Resources'})")=='card' and ev("typeOf({fm:{type:'inbox',label:'todo'},folder:'00_Inbox'})")=='card' and ev("isTask({fm:{type:'inbox',label:'todo'},folder:'00_Inbox'})")
+    assert ev("typeOf({fm:{},folder:'10_Projects'})")=='project' and ev("typeOf({fm:{type:'weekly'},folder:'01_Daily'})")=='card' and ev("typeOf({fm:{type:'note'},folder:'20_Notes'})")=='card'
+    # 할 일은 종류가 아니라 카드의 상태: 날짜 · 할 일 표시 · 완료 중 하나 (옛 할 일 노트 포함)
+    T=lambda fm,folder='20_Cards':ev("([fm,folder])=>isTask({fm,folder})",[fm,folder])
+    assert not T({'type':'card'}) and T({'type':'card','due':'2026-01-01'}) and T({'type':'card','todo':True}) and T({'type':'card','status':'done'}) and T({'type':'todo'}) and T({},'11_Todos') and not T({'type':'project','due':'2026-01-01'},'10_Projects')
+    assert ev("targetFolder({fm:{type:'todo'},folder:'11_Todos'})")=='20_Cards' and ev("normFM({type:'todo',label:'todo'},'card',true)")=={'type':'card','todo':True,'label':''}
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
@@ -303,10 +315,10 @@ with sync_playwright() as p:
         m.click('.pbarx button[data-p] >> nth=0');idle(m);assert m.is_visible('.tboard') and m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 프로젝트 보드 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'12-mobile-board.png'))
         m.click('#projBack');idle(m)
-        tab(m,'노트')
+        tab(m,'카드')
         tab(m,'할 일');assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 할 일 탭 가로 스크롤'
-        m.fill('.tdadd input[type=text]','폰에서 추가');m.click('.tdadd .addbtn');idle(m);assert '11_Todos/폰에서 추가.md' in files(m),'추가 버튼으로 할 일이 안 만들어짐'
-        m.fill('.tdadd input[type=text]','폰 엔터');m.press('.tdadd input[type=text]','Enter');idle(m);assert '11_Todos/폰 엔터.md' in files(m)
+        m.fill('.tdadd input[type=text]','폰에서 추가');m.click('.tdadd .addbtn');idle(m);assert '20_Cards/폰에서 추가.md' in files(m),'추가 버튼으로 할 일이 안 만들어짐'
+        m.fill('.tdadd input[type=text]','폰 엔터');m.press('.tdadd input[type=text]','Enter');idle(m);assert '20_Cards/폰 엔터.md' in files(m)
         assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'추가 뒤 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'10-mobile-todo.png'))
         tab(m,'문서');m.click('.tree .tn:has-text("수납 아이디어")');idle(m);m.click('#pBody');m.keyboard.press('Control+End');m.type('#pBody','\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n[[');idle(m,300)
