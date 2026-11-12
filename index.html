@@ -1300,8 +1300,16 @@ async function createNote({type='note',title,project='',label='',due='',body='',
   else raw=buildFM(base)+`# ${title}\n\n`+(body?body.replace(/\s*$/,'')+'\n':'');
   const p=parseFM(raw);const n={path,sha:null,raw,fm:p.fm,body:p.body,title:titleOf(path,p.body),folder:path.split('/')[0]};
   const msg=`web: ${TYPE_NAME[type]} ${title}`.slice(0,70);
-  try{const r=await api.put(path,raw,null,msg);n.sha=r.content.sha;}
-  catch(e){if(isNetErr(e))queue.push({op:'put',path,content:raw,message:msg,base:null});else{toast('생성 실패: '+e.message,4000);return null;}}
+  /* 다른 기기·AI가 같은 이름의 파일을 먼저 만들었으면(목록이 옛것) 이름 뒤에 날짜를 붙여 다시 시도한다 */
+  const stem=path.replace(/\.md$/,'');const tries=[path,`${stem} ${today()}.md`,`${stem} ${today()} ${Date.now().toString(36).slice(-4)}.md`].filter((p,i,a)=>a.indexOf(p)===i);
+  let made=false,lastErr=null;
+  for(const p2 of tries){
+    try{const r=await api.put(p2,raw,null,msg);n.path=p2;n.sha=r.content.sha;made=true;break;}
+    catch(e){lastErr=e;if(isNetErr(e)){queue.push({op:'put',path:p2,content:raw,message:msg,base:null});n.path=p2;made=true;break;}
+      if(!isConflict(e))break;}
+  }
+  if(!made){toast('생성 실패: '+lastErr.message,4000);return null;}
+  if(n.path!==path)setTimeout(()=>load(),800);   // 목록이 옛것이었으니 다시 읽는다
   notes.unshift(n);saveCache();fillFolders();if(!quiet)render();return n;
 }
 async function addTodoNote(text,due,quiet,project,label){return !!await createNote({type:'todo',title:text,due:due||'',project:project||'',label:label||'',quiet});}
@@ -1352,7 +1360,8 @@ function renderTodo(m){
     const[sec,desc]=sectionOf(e.due);preview.innerHTML='';
     if(inp.value.trim()||todoDue!=='none')preview.append(el('span',{},inp.value.trim()?`→ ${desc}${e.from==='text'?` (“${e.token}”에서 읽음)`:''} · ${psel.value?'프로젝트 '+psel.value:'프로젝트 없음'}${todoLabel&&todoLabel!=='__none'?' · 라벨 '+labelOpt(todoLabel).name:''}`:`→ ${desc}`));
     if(boxReady)syncBox();};
-  for(const[id,name]of dueOpts)chips.append(el('button',{type:'button',class:'chip','data-id':id,onclick:()=>{todoDue=id;if(id==='date'){dateIn.style.display='';dateIn.showPicker?.();}paint();if(id!=='date')inp.focus();}},name));
+  for(const[id,name]of dueOpts)chips.append(el('button',{type:'button',class:'chip','data-id':id,onclick:()=>{const again=todoDue==='date';todoDue=id;const pick=id==='date'&&(again||!todoDate);   /* 고른 날짜가 있으면 그대로 쓰고, 한 번 더 누르면 달력 */
+    if(pick){dateIn.style.display='';try{dateIn.showPicker?.();}catch{}}paint();if(!pick)inp.focus();}},name));
   chips.append(dateIn);
   const plist=projectList();if(todoFolder!=='*')todoProject=todoFolder;
   const psel=el('select',{'aria-label':'프로젝트',title:'프로젝트',onchange:()=>{todoProject=psel.value;paint();inp.focus();}});psel.append(el('option',{value:''},'프로젝트 없음'));for(const pn of plist)psel.append(el('option',{value:pn},pn));psel.value=plist.includes(todoProject)?todoProject:'';

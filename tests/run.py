@@ -168,6 +168,29 @@ def t_todo(pg):
     shot(pg,'04-todo')
     pg.click('.tdadd .chip[data-id=none]');idle(pg);assert not pg.is_visible('.tdtoday') and not pg.is_visible('[data-sec=todaylate]')
     pg.click('.tdadd .chip[data-id=today]');idle(pg)
+def t_todo_when(pg):
+    # 오늘 / 날짜 / 나중에 — 세 선택 모두 할 일로 만들어지고 할 일 탭에 나온다
+    tab(pg,'할 일');pg.click('.tdside button[data-key="*"]');idle(pg);inp='.tdadd input[type=text]'
+    td=pg.evaluate('today()');d7=pg.evaluate('addDays(today(),7)')
+    pg.click('.tdadd .chip[data-id=today]');pg.fill(inp,'칩 하나');pg.press(inp,'Enter');idle(pg)
+    c=fget(pg,'20_Notes/칩 하나.md');assert c and 'type: note' in c and f'due: {td}' in c and 'todo: true' in c,c
+    assert '칩 하나' in pg.inner_text('.tdtoday')
+    pg.click('.tdadd .chip[data-id=date]');pg.fill('.tdadd input[type=date]',d7);idle(pg)
+    pg.fill(inp,'칩 둘');pg.click('.tdadd .addbtn');idle(pg)
+    c=fget(pg,'20_Notes/칩 둘.md');assert c and f'due: {d7}' in c and 'todo: true' in c,c
+    assert '칩 둘' in pg.inner_text('.tdmain'),'고른 날짜의 할 일이 안 보임'
+    pg.click('.tdadd .chip[data-id=none]');pg.fill(inp,'칩 셋');pg.press(inp,'Enter');idle(pg)
+    c=fget(pg,'20_Notes/칩 셋.md');assert c and 'todo: true' in c and 'due' not in c,c
+    assert '칩 셋' in pg.inner_text('.tdmain'),'나중에 할 일이 안 보임'
+    # 목록에 없는 같은 이름 파일이 이미 있어도(다른 기기·AI가 만든 것) 실패하지 않고 날짜를 붙여 만든다
+    pg.evaluate("c=>{__FILES['20_Notes/겹치는 이름.md']=c}",'---\ntype: note\n---\n# 겹치는 이름\n')
+    for chip in ['today','date','none']:
+        pg.click(f'.tdadd .chip[data-id={chip}]');idle(pg,150);pg.fill(inp,'겹치는 이름');pg.press(inp,'Enter');idle(pg,1500)
+        assert '생성 실패' not in pg.inner_text('body'),chip
+    fs=[f for f in files(pg) if f.startswith('20_Notes/겹치는 이름')];assert len(fs)==4,fs
+    assert sum('todo: true' in fget(pg,f) for f in fs)==3,fs
+    tab(pg,'노트');assert not any(r.startswith('칩 ') for r in rows(pg)),rows(pg)
+    pg.click('.tdadd .chip[data-id=today]') if False else None
 def t_convert(pg):
     tab(pg,'노트');view(pg,'노트');open_row(pg,'주말에 볼 영상');shot(pg,'05-note-card')
     # 노트 ↔ 할 일: 표시만 바뀌고 파일은 그대로. 할 일이 되면 노트 탭에서 빠지고 할 일 탭에 나온다
@@ -288,7 +311,7 @@ def t_unit(pg):
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
-TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_links,t_settings,t_offline]
+TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_links,t_settings,t_offline]
 with sync_playwright() as p:
     b=p.chromium.launch();pg=b.new_page(viewport={'width':1280,'height':860});errs=[]
     pg.on('pageerror',lambda e:errs.append(str(e)));pg.on('console',lambda m:errs.append('console: '+m.text) if m.type=='error' else None)
