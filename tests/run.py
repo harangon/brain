@@ -303,6 +303,33 @@ def t_settings(pg):
     pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
     assert pg.locator('#optStatus .opt').count()==3 and pg.locator('#optStatus .opt button.x').count()==1 and pg.locator('#optStatus input.id[disabled]').count()==2
     pg.click('#sCancel');idle(pg,200)
+def t_stale(pg):
+    # 다른 기기·AI가 바꾼 것을 조용히 받아온다: 새 파일, 옮긴 파일, 고친 파일, 지운 파일
+    tab(pg,'노트');pg.click('.nside button[data-k="project"][data-v=""]') if False else None
+    src=pg.evaluate("notes.find(n=>n.path.startsWith('20_Notes/')&&n.sha&&!isTask(n)&&__FILES[n.path]).path")
+    before=pg.evaluate('notes.length')
+    pg.evaluate("""src=>{const F=__FILES;F['20_Notes/밖에서 만든 노트.md']='---\\ntype: note\\n---\\n# 밖에서 만든 노트\\n';
+      F['20_Notes/옮겨진 메모.md']=F[src];delete F[src];}""",src)
+    assert pg.evaluate('softRefresh()')==True,pg.evaluate("[softBusy,loadError,notes.length,saving,queue.list.length,!!current,document.activeElement.tagName,document.activeElement.id,!!document.querySelector('.modal.on,.modal.open,.dragging')]");idle(pg)
+    r=rows(pg);assert '밖에서 만든 노트' in r and pg.evaluate("notes.some(n=>n.path==='20_Notes/옮겨진 메모.md')") and not pg.evaluate("p=>notes.some(n=>n.path===p)",src),r
+    assert pg.evaluate('notes.length')==before+1
+    assert pg.evaluate('softRefresh()')==False,'바뀐 것이 없으면 다시 그리지 않는다'
+    # 옮겨진 파일을 고쳐도 실패하지 않는다
+    pg.evaluate("saveNote(notes.find(n=>n.path==='20_Notes/옮겨진 메모.md'),{todo:true},undefined,undefined,true)");idle(pg,500);assert 'todo: true' in fget(pg,'20_Notes/옮겨진 메모.md')
+    assert '실패' not in pg.inner_text('#toast')
+    # 입력 중이거나 패널이 열려 있으면 건너뛴다
+    tab(pg,'할 일');pg.fill('.tdadd input[type=text]','쓰는 중');pg.evaluate("__FILES['20_Notes/또 밖에서.md']='---\\ntype: note\\n---\\n# 또 밖에서\\n'")
+    assert pg.evaluate('softRefresh()')==False and pg.input_value('.tdadd input[type=text]')=='쓰는 중'
+    pg.fill('.tdadd input[type=text]','x');pg.press('.tdadd input[type=text]','Backspace');pg.evaluate('document.activeElement.blur()')
+    assert pg.evaluate('softRefresh()')==True
+    # 오프라인에서 만든 것과 같은 이름의 파일이 그 사이 생겼으면 덮어쓰지 않는다
+    pg.evaluate('window.__OFFLINE=true');inp='.tdadd input[type=text]';pg.fill(inp,'겹친 오프라인');pg.press(inp,'Enter');idle(pg)
+    pg.evaluate("__FILES['20_Notes/겹친 오프라인.md']='---\\ntype: note\\n---\\n# 겹친 오프라인\\n\\n남의 내용\\n'")
+    pg.evaluate('window.__OFFLINE=false;queue.flush()');idle(pg,700)
+    assert '남의 내용' in fget(pg,'20_Notes/겹친 오프라인.md'),'다른 기기의 파일을 덮어씀'
+    fs=[f for f in files(pg) if f.startswith('20_Notes/겹친 오프라인')];assert len(fs)==2 and not pg.is_visible('#qbadge'),fs
+    assert pg.evaluate("notes.filter(n=>n.path.startsWith('20_Notes/겹친 오프라인')).every(n=>n.sha)")
+
 def t_offline(pg):
     tab(pg,'할 일');pg.evaluate('window.__OFFLINE=true');inp='.tdadd input[type=text]'
     pg.fill(inp,'오프라인 할 일');pg.press(inp,'Enter');idle(pg);assert '오프라인 할 일' in pg.inner_text('.tdmain') and '20_Notes/오프라인 할 일.md' not in files(pg)
@@ -322,7 +349,7 @@ def t_unit(pg):
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
-TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_links,t_settings,t_offline]
+TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_links,t_settings,t_offline,t_stale]
 with sync_playwright() as p:
     b=p.chromium.launch();pg=b.new_page(viewport={'width':1280,'height':860});errs=[]
     pg.on('pageerror',lambda e:errs.append(str(e)));pg.on('console',lambda m:errs.append('console: '+m.text) if m.type=='error' else None)
