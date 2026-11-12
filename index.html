@@ -184,12 +184,14 @@ td input.inl{width:118px}
 .pbarx button small{margin-left:6px;color:var(--fg3);font-size:11.5px}.pbarx button:hover{border-color:var(--line2);color:var(--fg)}
 .pbarx button[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:600}.pbarx button[aria-pressed=true] small{color:inherit;opacity:.7}
 .pbarx button.new{border-style:dashed;color:var(--accent)}
-.ptile.new{background:transparent;border-style:dashed;min-height:0}.ptile.new b{color:var(--accent)}
 .pgh{margin:16px 0 8px;font-size:12.5px;font-weight:500;color:var(--fg2)}.pgh small{margin-left:6px;color:var(--fg3);font-weight:400}
-.ptiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;max-width:1100px}
-.ptile{display:flex;flex-direction:column;gap:6px;align-items:flex-start;text-align:left;padding:14px;min-height:92px;border-radius:10px;background:var(--bg2);border:1px solid var(--line)}
-.ptile:hover{border-color:var(--accent)}.ptile b{font-size:15px;font-weight:600}.ptile .pm{font-size:12px;color:var(--fg3)}
-.ptile .pbar{display:block;width:100%;height:4px;border-radius:2px;background:var(--line);overflow:hidden}.ptile .pbar u{display:block;height:100%;background:var(--accent)}
+.plist2{max-width:860px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.prow{display:flex;gap:10px;align-items:center;width:100%;text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--bg)}
+.prow:last-child{border-bottom:0}.prow:hover{background:var(--bg2)}.prow b{font-size:14.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow .sp{flex:1}.prow .pm{font-size:12px;color:var(--fg3);white-space:nowrap}.prow .pm.late{color:var(--danger)}
+.prow .pp2{display:flex;gap:6px;align-items:center;width:110px;flex:0 0 auto;justify-content:flex-end}
+.pbar{display:block;flex:1;height:4px;border-radius:2px;background:var(--line);overflow:hidden}.pbar u{display:block;height:100%;background:var(--accent)}
+.pbarx button.more{border-color:transparent;color:var(--fg3);font-size:12.5px}
 /* 보드: 화면 너비를 다 쓰고, 줄이 많으면 옆으로 민다 */
 .tboard{display:flex;gap:10px;align-items:flex-start;overflow-x:auto;padding-bottom:16px;min-height:calc(100vh - 190px);scroll-snap-type:x proximity}
 .tlist{flex:0 0 272px;background:var(--bg2);border-radius:10px;padding:8px;scroll-snap-align:start;max-height:calc(100vh - 170px);display:flex;flex-direction:column}
@@ -428,6 +430,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   .tabs button{padding:4px 8px}
   td.t{min-width:140px}
   .col{flex-basis:220px}
+  .prow{flex-wrap:wrap;row-gap:4px}.prow b{flex:1 1 100%}.prow .sp{display:none}.prow .pp2{margin-left:auto}
   .tlist{flex-basis:82vw}.phead .ptitle{font-size:17px}.tboard{min-height:60vh}
   .hide-m{display:none}
   .sugl{display:none}
@@ -1082,7 +1085,9 @@ function renderTable(v,m,mode=''){
    "완료" 줄이 있으면 완료된 할 일은 그 줄에 놓이고, 그 줄로 끌어 넣으면 완료가 된다 */
 const DEFAULT_LISTS=['할 일','진행 중','완료'],DONE_LIST='완료';
 let projSel=localStorage.getItem('brain.proj')||'',projLabel='',projArchOpen=false,projFocus='',cardDrag=null;
-function selectProject(t){projSel=t;localStorage.setItem('brain.proj',t);render();}
+let projRecent=[];try{projRecent=JSON.parse(localStorage.getItem('brain.projRecent')||'[]');}catch{}
+function selectProject(t){projSel=t;localStorage.setItem('brain.proj',t);if(t){projRecent=[t,...projRecent.filter(x=>x!==t)].slice(0,30);localStorage.setItem('brain.projRecent',JSON.stringify(projRecent));}render();}
+const PROJ_BAR_MAX=8;
 const cleanList=x=>String(x).replace(/[\[\],"'#:]/g,' ').replace(/\s+/g,' ').trim().slice(0,30);
 function listsOf(p){let v=p.fm.lists;v=Array.isArray(v)?v:(v?[v]:[]);v=[...new Set(v.map(x=>String(x).trim()).filter(Boolean))];return v.length?v:[...DEFAULT_LISTS];}
 const cardsOf=p=>notes.filter(n=>!isArchived(n)&&typeOf(n)!=='project'&&projectOf(n)===p.title);
@@ -1131,10 +1136,13 @@ async function newProject(){
 function projBar(all,cur){
   const bar=el('div',{class:'pbarx',role:'tablist','aria-label':'프로젝트'});
   bar.append(el('button',{id:'projBack',role:'tab','aria-pressed':String(!cur),title:'프로젝트 전체 보기 (끝낸 프로젝트 포함)',onclick:()=>selectProject('')},'전체'));
-  const live=[...config.statuses.filter(o=>o.id!=='done').flatMap(o=>all.filter(n=>n.fm.status===o.id)),...all.filter(n=>!statusOpt(n.fm.status))];
-  const list=cur&&!live.includes(cur)?[...live,cur]:live;   // 완료 상태 프로젝트는 '전체'에서만 (지금 열려 있으면 표시)
+  const rank=n=>{const k=projRecent.indexOf(n.title);return k<0?999:k;};
+  const active=all.filter(n=>n.fm.status==='active'||!statusOpt(n.fm.status)).sort((a,b)=>a.title.localeCompare(b.title));
+  let list=[...active].sort((a,b)=>rank(a)-rank(b)).slice(0,PROJ_BAR_MAX).sort((a,b)=>a.title.localeCompare(b.title));   // 자리는 이름순으로 고정
+  if(cur&&!list.includes(cur))list=[...list,cur];   // 보류·완료거나 밀려난 프로젝트도 열려 있는 동안은 표시
   for(const n of list){const tl=todosOf(n.title),d=tl.filter(t=>t.fm.status==='done').length;
     bar.append(el('button',{role:'tab','data-p':n.title,'aria-pressed':String(n===cur),onclick:()=>selectProject(n.title)},n.title,tl.length?el('small',{},`${d}/${tl.length}`):''));}
+  const rest=all.length-list.length;if(rest>0)bar.append(el('button',{class:'more',title:'줄에 없는 프로젝트는 전체 목록에서 고릅니다',onclick:()=>selectProject('')},`외 ${rest}개`));
   bar.append(el('button',{class:'new',id:'projNew',onclick:newProject},'+ 프로젝트'));
   setTimeout(()=>bar.querySelector('[aria-pressed=true]')?.scrollIntoView({block:'nearest',inline:'nearest'}),0);
   return bar;
@@ -1153,13 +1161,14 @@ function renderProjects(m){
   else if(!shown.length)m.append(el('div',{class:'status'},'해당하는 프로젝트가 없습니다.'));
   const groups=[...config.statuses.map(o=>[o.name,shown.filter(n=>n.fm.status===o.id)]),['상태 없음',shown.filter(n=>!statusOpt(n.fm.status))]];
   for(const[name,list]of groups){if(!list.length)continue;
-    const grid=el('div',{class:'ptiles'});
+    const box=el('div',{class:'plist2'});
     for(const n of list){const tl=todosOf(n.title),d=tl.filter(t=>t.fm.status==='done').length,cn=cardsOf(n).length;
-      grid.append(el('button',{class:'ptile','data-p':n.title,onclick:()=>selectProject(n.title)},el('b',{},n.title),
-        el('span',{class:'pm'},[tl.length?`완료 ${d}/${tl.length}`:'',cn?`카드 ${cn}`:'카드 없음',n.fm.due?'마감 '+fmtDue(n.fm.due):''].filter(Boolean).join(' · ')),
-        tl.length?el('i',{class:'pbar'},el('u',{style:`width:${Math.round(d/tl.length*100)}%`})):'',labelTag(n)));}
-    m.append(el('h4',{class:'pgh'},name,el('small',{},String(list.length))),grid);}
-  if(all.length&&!q&&!projLabel)m.append(el('div',{class:'ptiles',style:'margin-top:14px'},el('button',{class:'ptile new',onclick:newProject},el('b',{},'+ 새 프로젝트'),el('span',{class:'pm'},'이름만 정하면 바로 보드가 열립니다'))));
+      box.append(el('button',{class:'prow','data-p':n.title,onclick:()=>selectProject(n.title)},
+        el('b',{},n.title),labelTag(n),el('span',{class:'sp'}),
+        n.fm.due?el('span',{class:'pm'+(isLate(n)?' late':'')},'마감 '+fmtDue(n.fm.due)):'',
+        el('span',{class:'pm'},cn?`카드 ${cn}`:'카드 없음'),
+        el('span',{class:'pp2'},tl.length?el('i',{class:'pbar'},el('u',{style:`width:${Math.round(d/tl.length*100)}%`})):'',el('span',{class:'pm'},tl.length?`${d}/${tl.length}`:''))));}
+    m.append(el('h4',{class:'pgh'},name,el('small',{},String(list.length))),box);}
   if(arch.length)m.append(archSection('parch','끝낸 프로젝트',arch.filter(n=>!q||n.title.toLowerCase().includes(q)),projArchOpen,()=>{projArchOpen=!projArchOpen;render();}));
 }
 function renderProjectBoard(m,p,q){

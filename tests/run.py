@@ -10,7 +10,11 @@ def idle(pg,ms=350):pg.wait_for_timeout(ms)
 def view(pg,name):
     if name=='프로젝트':return tab(pg,'프로젝트')
     if not pg.is_visible('#subtabs'):tab(pg,'노트')
-def proj(pg,name):tab(pg,'프로젝트');pg.click(f'.pbarx button[data-p="{name}"]');idle(pg)
+def proj(pg,name):
+    tab(pg,'프로젝트')
+    if pg.locator(f'.pbarx button[data-p="{name}"]').count():pg.click(f'.pbarx button[data-p="{name}"]')
+    else:pg.click('#projBack');idle(pg);pg.click(f'.prow[data-p="{name}"]')
+    idle(pg)
 def proj_home(pg):tab(pg,'프로젝트');pg.click('#projBack');idle(pg)
 def proj_card(pg,name):proj(pg,name);pg.click('#projOpen');idle(pg)
 def col(pg,c):return pg.eval_on_selector_all(f'.tlist[data-list="{c}"] .tcard .ct','e=>e.map(x=>x.textContent)')
@@ -70,13 +74,20 @@ def t_views(pg):
     side(pg,'label','');assert '종류' not in pg.inner_text('#main thead')
     # 프로젝트 탭 홈: 프로젝트(보드) 고르기
     proj_home(pg);assert not pg.is_visible('#quick') and not pg.is_visible('#subtabs')
-    home=pg.inner_text('#main');assert '진행' in home and '보류' in home and '완료 1/4' in pg.inner_text('.ptile[data-p="집 정리"]') and '끝낸 프로젝트' in home,home
+    home=pg.inner_text('#main');assert '진행' in home and '보류' in home and '1/4' in pg.inner_text('.prow[data-p="집 정리"]') and pg.locator('.pbarx button[data-p="블로그 개편"]').count()==0 and '끝낸 프로젝트' in home,home
     assert '업무' in pg.inner_text('.lchips');pg.click('.lchips button[data-v="work"]');idle(pg)
-    assert pg.eval_on_selector_all('.ptile[data-p]','e=>e.map(x=>x.dataset.p)')==['블로그 개편'];pg.click('.lchips button[data-v="work"]');idle(pg);assert pg.locator('.ptile[data-p]').count()==2 and pg.locator('.ptile.new').count()==1
+    assert pg.eval_on_selector_all('.prow[data-p]','e=>e.map(x=>x.dataset.p)')==['블로그 개편'];pg.click('.lchips button[data-v="work"]');idle(pg);assert pg.locator('.prow[data-p]').count()==2 and pg.locator('.ptile').count()==0 and '새 프로젝트' not in pg.inner_text('#main')
     shot(pg,'02-project-home')
+    # 프로젝트가 많으면: 줄에는 진행 중인 것 최대 8개(최근에 연 것 우선), 나머지는 '외 N개' → 전체 목록
+    pg.evaluate("(async()=>{for(let i=1;i<=10;i++)await createNote({type:'project',title:'P'+String(i).padStart(2,'0'),quiet:true});render();})()");idle(pg,900)
+    names=pg.eval_on_selector_all('.pbarx button[data-p]','e=>e.map(x=>x.dataset.p)');assert len(names)==8 and '블로그 개편' not in names and '외 4개' in pg.inner_text('.pbarx .more'),names
+    pg.click('.prow[data-p="블로그 개편"]');idle(pg);assert pg.get_attribute('.pbarx button[data-p="블로그 개편"]','aria-pressed')=='true' and pg.locator('.pbarx button[data-p]').count()==9
+    pg.click('.pbarx .more');idle(pg);assert pg.locator('.prow[data-p]').count()==12
+    if SHOTS:pg.screenshot(path=os.path.join(SHOTS,'02-project-many.png'))
+    pg.evaluate("(async()=>{for(const n of notes.filter(x=>/^P\\d\\d$/.test(x.title))){await api.del(n.path,n.sha,'t');}notes=notes.filter(x=>!/^P\\d\\d$/.test(x.title));render();})()");idle(pg,700);assert pg.locator('.prow[data-p]').count()==2
     # 보드: 줄(할 일 · 진행 중 · 완료)에 그 프로젝트의 할 일·노트가 카드로. 완료된 할 일은 완료 줄
-    # 타일로 열고, 위 프로젝트 줄에서 바로 다른 프로젝트로 바꾼다
-    pg.click('.ptile[data-p="블로그 개편"]');idle(pg);assert pg.inner_text('.phead .ptitle')=='블로그 개편' and pg.get_attribute('.pbarx button[data-p="블로그 개편"]','aria-pressed')=='true'
+    # 목록에서 열고, 위 프로젝트 줄에서 바로 다른 프로젝트로 바꾼다
+    pg.click('.prow[data-p="블로그 개편"]');idle(pg);assert pg.inner_text('.phead .ptitle')=='블로그 개편' and pg.get_attribute('.pbarx button[data-p="블로그 개편"]','aria-pressed')=='true'
     pg.click('.pbarx button[data-p="집 정리"]');idle(pg);assert '1/4' in pg.inner_text('.pbarx button[data-p="집 정리"]')
     assert pg.inner_text('.phead .ptitle')=='집 정리' and lists(pg)==['할 일','진행 중','완료']
     assert col(pg,'할 일')[:2]==['창고 치수 재기','업체 견적 받기'] and set(col(pg,'할 일')[2:])=={'버릴 것 목록','수납장 문서 요약','수납 아이디어','선반 치수','선반 자료'} and col(pg,'완료')==['비용 비교'] and col(pg,'진행 중')==[],col(pg,'할 일')
@@ -274,7 +285,9 @@ with sync_playwright() as p:
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'09-mobile-inbox.png'))
         for vn in ['노트','프로젝트']:
             view(m,vn);assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 '+vn+' 보기 가로 스크롤'
-        tab(m,'프로젝트');m.click('.pbarx button[data-p] >> nth=0');idle(m);assert m.is_visible('.tboard') and m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 프로젝트 보드 가로 스크롤'
+        tab(m,'프로젝트');assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 프로젝트 목록 가로 스크롤'
+        if SHOTS:m.screenshot(path=os.path.join(SHOTS,'12-mobile-projects.png'))
+        m.click('.pbarx button[data-p] >> nth=0');idle(m);assert m.is_visible('.tboard') and m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 프로젝트 보드 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'12-mobile-board.png'))
         m.click('#projBack');idle(m)
         tab(m,'노트')
