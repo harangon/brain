@@ -10,15 +10,8 @@ def idle(pg,ms=350):pg.wait_for_timeout(ms)
 def view(pg,name):
     if name=='프로젝트':return tab(pg,'프로젝트')
     if not pg.is_visible('#subtabs'):tab(pg,'노트')
-def proj(pg,name):
-    tab(pg,'프로젝트')
-    if pg.is_visible('#projBack'):
-        if pg.inner_text('.phead .ptitle')==name:return
-        pg.click('#projBack');idle(pg)
-    pg.click(f'.ptile[data-p="{name}"]');idle(pg)
-def proj_home(pg):
-    tab(pg,'프로젝트')
-    if pg.is_visible('#projBack'):pg.click('#projBack');idle(pg)
+def proj(pg,name):tab(pg,'프로젝트');pg.click(f'.pbarx button[data-p="{name}"]');idle(pg)
+def proj_home(pg):tab(pg,'프로젝트');pg.click('#projBack');idle(pg)
 def proj_card(pg,name):proj(pg,name);pg.click('#projOpen');idle(pg)
 def col(pg,c):return pg.eval_on_selector_all(f'.tlist[data-list="{c}"] .tcard .ct','e=>e.map(x=>x.textContent)')
 def lists(pg):return pg.eval_on_selector_all('.tlist[data-list]','e=>e.map(x=>x.dataset.list)')
@@ -79,10 +72,13 @@ def t_views(pg):
     proj_home(pg);assert not pg.is_visible('#quick') and not pg.is_visible('#subtabs')
     home=pg.inner_text('#main');assert '진행' in home and '보류' in home and '완료 1/4' in pg.inner_text('.ptile[data-p="집 정리"]') and '끝낸 프로젝트' in home,home
     assert '업무' in pg.inner_text('.lchips');pg.click('.lchips button[data-v="work"]');idle(pg)
-    assert pg.eval_on_selector_all('.ptile','e=>e.map(x=>x.dataset.p)')==['블로그 개편'];pg.click('.lchips button[data-v="work"]');idle(pg);assert pg.locator('.ptile').count()==2
+    assert pg.eval_on_selector_all('.ptile[data-p]','e=>e.map(x=>x.dataset.p)')==['블로그 개편'];pg.click('.lchips button[data-v="work"]');idle(pg);assert pg.locator('.ptile[data-p]').count()==2 and pg.locator('.ptile.new').count()==1
     shot(pg,'02-project-home')
     # 보드: 줄(할 일 · 진행 중 · 완료)에 그 프로젝트의 할 일·노트가 카드로. 완료된 할 일은 완료 줄
-    proj(pg,'집 정리');assert pg.inner_text('.phead .ptitle')=='집 정리' and lists(pg)==['할 일','진행 중','완료']
+    # 타일로 열고, 위 프로젝트 줄에서 바로 다른 프로젝트로 바꾼다
+    pg.click('.ptile[data-p="블로그 개편"]');idle(pg);assert pg.inner_text('.phead .ptitle')=='블로그 개편' and pg.get_attribute('.pbarx button[data-p="블로그 개편"]','aria-pressed')=='true'
+    pg.click('.pbarx button[data-p="집 정리"]');idle(pg);assert '1/4' in pg.inner_text('.pbarx button[data-p="집 정리"]')
+    assert pg.inner_text('.phead .ptitle')=='집 정리' and lists(pg)==['할 일','진행 중','완료']
     assert col(pg,'할 일')[:2]==['창고 치수 재기','업체 견적 받기'] and set(col(pg,'할 일')[2:])=={'버릴 것 목록','수납장 문서 요약','수납 아이디어','선반 치수','선반 자료'} and col(pg,'완료')==['비용 비교'] and col(pg,'진행 중')==[],col(pg,'할 일')
     # 카드 추가: 할 일(Enter) / 노트(버튼)
     ti='.tlist[data-list="진행 중"] .cadd input';pg.fill(ti,'내일 창고 청소');pg.press(ti,'Enter');idle(pg)
@@ -196,7 +192,7 @@ def t_project_restore(pg):
 def t_delete_project(pg):
     proj_card(pg,'블로그 새단장');pg.click('#card .actions .danger');assert '프로젝트 없음' in pg.inner_text('#askMsg');ok(pg);idle(pg,600)
     assert '10_Projects/블로그 새단장.md' not in files(pg) and 'project' not in fget(pg,'11_Todos/도메인 연장.md')
-    proj_home(pg);pg.fill('.padd input','새 프로젝트');pg.press('.padd input','Enter');idle(pg,700);c=fget(pg,'10_Projects/새 프로젝트.md');assert c and 'type: project' in c and 'status: active' in c,c
+    proj(pg,'집 정리') if False else tab(pg,'프로젝트');pg.click('#projNew');pg.fill('#askField input','새 프로젝트');ok(pg);idle(pg,400);c=fget(pg,'10_Projects/새 프로젝트.md');assert c and 'type: project' in c and 'status: active' in c,c
     assert pg.inner_text('.phead .ptitle')=='새 프로젝트' and lists(pg)==['할 일','진행 중','완료'] and col(pg,'할 일')==[]
 def t_misc(pg):
     tab(pg,'일정');assert pg.locator('.calgrid .day').count()==42
@@ -264,7 +260,7 @@ with sync_playwright() as p:
     for t in TESTS:
         try:t(pg);results.append((t.__name__,'ok',''))
         except Exception as e:
-            results.append((t.__name__,'FAIL',''.join(traceback.format_exception_only(type(e),e)).strip()[:600]))
+            results.append((t.__name__,'FAIL','line '+str(traceback.extract_tb(e.__traceback__)[-1].lineno)+' '+''.join(traceback.format_exception_only(type(e),e)).strip()[:500]))
             if SHOTS:pg.screenshot(path=os.path.join(SHOTS,'FAIL-'+t.__name__+'.png'))
             for sel in ['#askCancel','#pClose']:
                 try:
@@ -278,7 +274,7 @@ with sync_playwright() as p:
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'09-mobile-inbox.png'))
         for vn in ['노트','프로젝트']:
             view(m,vn);assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 '+vn+' 보기 가로 스크롤'
-        tab(m,'프로젝트');m.click('.ptile >> nth=0');idle(m);assert m.is_visible('.tboard') and m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 프로젝트 보드 가로 스크롤'
+        tab(m,'프로젝트');m.click('.pbarx button[data-p] >> nth=0');idle(m);assert m.is_visible('.tboard') and m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰 프로젝트 보드 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'12-mobile-board.png'))
         m.click('#projBack');idle(m)
         tab(m,'노트')

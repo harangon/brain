@@ -179,6 +179,12 @@ td input.inl{width:118px}
 .tdchips{display:none}
 .padd{max-width:820px;margin-bottom:12px}
 .phead{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.phead .ptitle{font-size:19px;font-weight:700;text-align:left}.phead .ptitle:hover{color:var(--accent)}
+.pbarx{display:flex;gap:6px;align-items:center;overflow-x:auto;padding:2px 0 10px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+.pbarx button{flex:0 0 auto;white-space:nowrap;padding:6px 12px;border-radius:8px;border:1px solid var(--line);font-size:13.5px;color:var(--fg2);background:var(--bg)}
+.pbarx button small{margin-left:6px;color:var(--fg3);font-size:11.5px}.pbarx button:hover{border-color:var(--line2);color:var(--fg)}
+.pbarx button[aria-pressed=true]{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:600}.pbarx button[aria-pressed=true] small{color:inherit;opacity:.7}
+.pbarx button.new{border-style:dashed;color:var(--accent)}
+.ptile.new{background:transparent;border-style:dashed;min-height:0}.ptile.new b{color:var(--accent)}
 .pgh{margin:16px 0 8px;font-size:12.5px;font-weight:500;color:var(--fg2)}.pgh small{margin-left:6px;color:var(--fg3);font-weight:400}
 .ptiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;max-width:1100px}
 .ptile{display:flex;flex-direction:column;gap:6px;align-items:flex-start;text-align:left;padding:14px;min-height:92px;border-radius:10px;background:var(--bg2);border:1px solid var(--line)}
@@ -1116,19 +1122,34 @@ async function listMenu(p,name,anchor){
       if(mine.length&&!await confirmAsk('줄을 삭제할까요?',`"${name}" 줄의 카드 ${mine.length}개는 지우지 않고 "${to}" 줄로 옮깁니다.`,'삭제'))return;
       await saveNote(p,{lists:rest},undefined,undefined,true);for(const c of mine)await saveNote(c,{list:to},undefined,undefined,true);render();},'danger']]:[])]);
 }
+/* 프로젝트 줄: 어디서든 한 번에 바꾸고 만든다 — [전체] [프로젝트…] [+ 프로젝트] */
+async function newProject(){
+  const t=(await ask('새 프로젝트',{placeholder:'프로젝트 이름',ok:'만들기'})||'').trim();if(!t)return;
+  if(projectNote(t)){toast('같은 이름의 프로젝트가 있습니다');return;}
+  const n=await createNote({type:'project',title:t,tpl:'Project',quiet:true});if(n)selectProject(n.title);
+}
+function projBar(all,cur){
+  const bar=el('div',{class:'pbarx',role:'tablist','aria-label':'프로젝트'});
+  bar.append(el('button',{id:'projBack',role:'tab','aria-pressed':String(!cur),title:'프로젝트 전체 보기 (끝낸 프로젝트 포함)',onclick:()=>selectProject('')},'전체'));
+  const live=[...config.statuses.filter(o=>o.id!=='done').flatMap(o=>all.filter(n=>n.fm.status===o.id)),...all.filter(n=>!statusOpt(n.fm.status))];
+  const list=cur&&!live.includes(cur)?[...live,cur]:live;   // 완료 상태 프로젝트는 '전체'에서만 (지금 열려 있으면 표시)
+  for(const n of list){const tl=todosOf(n.title),d=tl.filter(t=>t.fm.status==='done').length;
+    bar.append(el('button',{role:'tab','data-p':n.title,'aria-pressed':String(n===cur),onclick:()=>selectProject(n.title)},n.title,tl.length?el('small',{},`${d}/${tl.length}`):''));}
+  bar.append(el('button',{class:'new',id:'projNew',onclick:newProject},'+ 프로젝트'));
+  setTimeout(()=>bar.querySelector('[aria-pressed=true]')?.scrollIntoView({block:'nearest',inline:'nearest'}),0);
+  return bar;
+}
 function renderProjects(m){
   if(loadError)m.append(el('div',{class:'evnote',style:'margin-bottom:8px'},`노트를 불러오지 못했습니다: ${loadError}`));
   state.q=$('#q').value;const q=state.q.trim().toLowerCase();
   const all=notes.filter(n=>isProjectNote(n)&&!isArchived(n)),arch=notes.filter(n=>isProjectNote(n)&&isArchived(n)).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1);
   const cur=all.find(n=>n.title===projSel);
-  if(cur)return renderProjectBoard(m,cur,q);
-  /* ---- 홈: 프로젝트 고르기 ---- */
-  const inp=el('input',{type:'text',placeholder:'새 프로젝트 이름',autocomplete:'off','aria-label':'프로젝트 추가',enterkeyhint:'done'});
-  const add=async()=>{const t=inp.value.trim();if(!t)return;if(projectNote(t)){toast('같은 이름의 프로젝트가 있습니다');return;}inp.value='';const n=await createNote({type:'project',title:t,tpl:'Project',quiet:true});if(n)selectProject(n.title);};
-  m.append(el('form',{class:'tdadd padd',onsubmit:e=>{e.preventDefault();add();}},inp,el('button',{type:'submit',class:'addbtn'},'+ 프로젝트')));
+  if(cur){m.append(projBar(all,cur));return renderProjectBoard(m,cur,q);}
+  /* ---- 전체: 프로젝트 타일 ---- */
+  m.append(projBar(all,null));
   m.append(labelBar(all,()=>projLabel,v=>{projLabel=v;}));
   const shown=all.filter(n=>(!projLabel||(projLabel==='__none'?!labelsOf(n).length:labelsOf(n).includes(projLabel)))&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>a.title.localeCompare(b.title));
-  if(!all.length)m.append(el('div',{class:'status'},'프로젝트가 없습니다. 위에 이름을 적어 만들어 보세요. 할 일 카드의 "프로젝트로 키우기"로도 만들 수 있습니다.'));
+  if(!all.length)m.append(el('div',{class:'status'},'프로젝트가 없습니다. ',el('button',{class:'addbtn',style:'margin-left:8px',onclick:newProject},'+ 프로젝트'),el('div',{class:'evnote',style:'margin-top:10px'},'할 일 카드의 "프로젝트로 키우기"로도 만들 수 있습니다.')));
   else if(!shown.length)m.append(el('div',{class:'status'},'해당하는 프로젝트가 없습니다.'));
   const groups=[...config.statuses.map(o=>[o.name,shown.filter(n=>n.fm.status===o.id)]),['상태 없음',shown.filter(n=>!statusOpt(n.fm.status))]];
   for(const[name,list]of groups){if(!list.length)continue;
@@ -1138,12 +1159,12 @@ function renderProjects(m){
         el('span',{class:'pm'},[tl.length?`완료 ${d}/${tl.length}`:'',cn?`카드 ${cn}`:'카드 없음',n.fm.due?'마감 '+fmtDue(n.fm.due):''].filter(Boolean).join(' · ')),
         tl.length?el('i',{class:'pbar'},el('u',{style:`width:${Math.round(d/tl.length*100)}%`})):'',labelTag(n)));}
     m.append(el('h4',{class:'pgh'},name,el('small',{},String(list.length))),grid);}
+  if(all.length&&!q&&!projLabel)m.append(el('div',{class:'ptiles',style:'margin-top:14px'},el('button',{class:'ptile new',onclick:newProject},el('b',{},'+ 새 프로젝트'),el('span',{class:'pm'},'이름만 정하면 바로 보드가 열립니다'))));
   if(arch.length)m.append(archSection('parch','끝낸 프로젝트',arch.filter(n=>!q||n.title.toLowerCase().includes(q)),projArchOpen,()=>{projArchOpen=!projArchOpen;render();}));
 }
 function renderProjectBoard(m,p,q){
   const lists=listsOf(p);const hit=n=>!q||n.title.toLowerCase().includes(q);
   m.append(el('div',{class:'phead'},
-    el('button',{class:'btn sm',id:'projBack',title:'프로젝트 목록으로',onclick:()=>selectProject('')},'← 프로젝트'),
     el('button',{class:'ptitle',title:'프로젝트 카드 열기 (설명·마감·라벨·활동)',onclick:()=>openNote(p)},p.title),
     inlineSelect(p,'status',config.statuses),p.fm.due?el('span',{class:'due'+(isLate(p)?' late':'')},'마감 '+fmtDue(p.fm.due)):'',labelTag(p),
     el('span',{class:'sp'}),el('button',{class:'btn sm',id:'projOpen',onclick:()=>openNote(p)},'상세'),el('button',{class:'btn sm pri',onclick:()=>finishProject(p)},'프로젝트 끝내기')));
