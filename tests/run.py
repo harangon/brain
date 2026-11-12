@@ -182,6 +182,17 @@ def t_todo_when(pg):
     pg.click('.tdadd .chip[data-id=none]');pg.fill(inp,'칩 셋');pg.press(inp,'Enter');idle(pg)
     c=fget(pg,'20_Notes/칩 셋.md');assert c and 'todo: true' in c and 'due' not in c,c
     assert '칩 셋' in pg.inner_text('.tdmain'),'나중에 할 일이 안 보임'
+    # 셋 중 하나는 늘 선택: 기본 오늘, 날짜를 고르기 전에는 앞의 선택 유지, 글에서 읽은 날짜는 맞는 칩
+    on=lambda:pg.eval_on_selector_all('.tdadd .chip[aria-pressed=true]','e=>e.map(x=>x.dataset.id)')
+    pg.click('.tdadd .chip[data-id=today]');idle(pg,150);assert on()==['today'],on()
+    pg.evaluate("todoDate='';render()");idle(pg,200);assert on()==['today'],on()
+    pg.click('.tdadd .chip[data-id=date]');idle(pg,150);assert on()==['today'] and pg.is_visible('.tdadd input[type=date]'),on()
+    pg.fill('.tdadd input[type=date]',d7);idle(pg,150);assert on()==['date'],on()
+    pg.fill(inp,'내일 확인');idle(pg,150);assert on()==['date'],on()
+    pg.fill(inp,'오늘 확인');idle(pg,150);assert on()==['today'],on()
+    pg.fill(inp,'x');pg.press(inp,'Backspace');idle(pg,300);assert on()==['date'],(on(),pg.evaluate('[todoDue,todoDate]'),pg.input_value(inp))
+    pg.click('.tdadd .chip[data-id=none]');idle(pg,150);assert on()==['none'],on()
+    pg.fill('.tdadd input[type=date]','') if pg.is_visible('.tdadd input[type=date]') else None
     # 목록에 없는 같은 이름 파일이 이미 있어도(다른 기기·AI가 만든 것) 실패하지 않고 날짜를 붙여 만든다
     pg.evaluate("c=>{__FILES['20_Notes/겹치는 이름.md']=c}",'---\ntype: note\n---\n# 겹치는 이름\n')
     for chip in ['today','date','none']:

@@ -1350,18 +1350,21 @@ function renderTodo(m){
   const box=el('section',{class:'tdtoday'});var boxReady=false;
   const inp=el('input',{type:'text',placeholder:'할 일 입력 (예: 금요일 보고서, 11/20 치과)',autocomplete:'off','aria-label':'할 일 추가'});
   const chips=el('div',{class:'chips',role:'group','aria-label':'날짜'});
-  const dateIn=el('input',{type:'date',class:'chipdate','aria-label':'날짜 선택',value:todoDate,onchange:()=>{todoDate=dateIn.value;todoDue=todoDate?'date':'today';paint();inp.focus();}});
+  const dateIn=el('input',{type:'date',class:'chipdate','aria-label':'날짜 선택',value:todoDate,onchange:()=>{todoDate=dateIn.value;todoDue=todoDate?'date':'today';picking=false;paint();inp.focus();}});let picking=false;if(todoDue==='date'&&!todoDate)todoDue='today';
   const dueOpts=[['today','오늘',()=>td],['date','날짜…',()=>todoDate||null],['none','나중에',()=>null]];
   const preview=el('div',{class:'tdprev','aria-live':'polite'});
   const sectionOf=due=>!due?['나중에','나중에 (날짜 없음)']:due<td?['지연','오늘 상자(지연)']:due===td?['오늘','오늘 상자']:due<=wk?['이번 주',`이번 주 · ${fmtDue(due)}`]:['이후',`이후 · ${fmtDue(due)}`];
   const effective=()=>{const w=parseWhen(inp.value);if(w)return{due:w.due,from:'text',token:w.token,rest:w.rest};const o=dueOpts.find(o=>o[0]===todoDue);return{due:o?o[2]():td,from:'chip',rest:inp.value.trim()};};
-  const paint=()=>{const e=effective();chips.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',String(e.from==='chip'&&c.dataset.id===todoDue)));
-    dateIn.style.display=todoDue==='date'?'':'none';chips.querySelector('[data-id=date]').textContent=todoDue==='date'&&todoDate?fmtDue(todoDate):'날짜…';
+  const paint=()=>{const e=effective();/* 셋 중 하나는 늘 선택돼 있다. 글에서 날짜를 읽었으면 그 날짜에 맞는 칩이 선택된다 */
+    const on=e.from==='chip'?todoDue:!e.due?'none':e.due===td?'today':'date';
+    chips.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',String(c.dataset.id===on)));
+    dateIn.style.display=todoDue==='date'||picking?'':'none';chips.querySelector('[data-id=date]').textContent=on==='date'&&e.due?fmtDue(e.due):'날짜…';
     const[sec,desc]=sectionOf(e.due);preview.innerHTML='';
     if(inp.value.trim()||todoDue!=='none')preview.append(el('span',{},inp.value.trim()?`→ ${desc}${e.from==='text'?` (“${e.token}”에서 읽음)`:''} · ${psel.value?'프로젝트 '+psel.value:'프로젝트 없음'}${todoLabel&&todoLabel!=='__none'?' · 라벨 '+labelOpt(todoLabel).name:''}`:`→ ${desc}`));
     if(boxReady)syncBox();};
-  for(const[id,name]of dueOpts)chips.append(el('button',{type:'button',class:'chip','data-id':id,onclick:()=>{const again=todoDue==='date';todoDue=id;const pick=id==='date'&&(again||!todoDate);   /* 고른 날짜가 있으면 그대로 쓰고, 한 번 더 누르면 달력 */
-    if(pick){dateIn.style.display='';try{dateIn.showPicker?.();}catch{}}paint();if(!pick)inp.focus();}},name));
+  for(const[id,name]of dueOpts)chips.append(el('button',{type:'button',class:'chip','data-id':id,onclick:()=>{const again=todoDue==='date';const pick=id==='date'&&(again||!todoDate);   /* 고른 날짜가 있으면 그대로 쓰고, 한 번 더 누르면 달력 */
+    if(id!=='date'||todoDate)todoDue=id;picking=pick;   /* 날짜를 고르기 전에는 앞의 선택을 그대로 둔다 */
+    paint();if(pick){try{dateIn.showPicker?.();}catch{}dateIn.focus();}else inp.focus();}},name));
   chips.append(dateIn);
   const plist=projectList();if(todoFolder!=='*')todoProject=todoFolder;
   const psel=el('select',{'aria-label':'프로젝트',title:'프로젝트',onchange:()=>{todoProject=psel.value;paint();inp.focus();}});psel.append(el('option',{value:''},'프로젝트 없음'));for(const pn of plist)psel.append(el('option',{value:pn},pn));psel.value=plist.includes(todoProject)?todoProject:'';
