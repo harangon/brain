@@ -266,6 +266,12 @@ td input.inl{width:118px}
 .card-v .desc.empty{color:var(--fg3)}
 .card-v .desc h1,.card-v .desc h2,.card-v .desc h3{font-size:1.05em;margin:.6em 0 .2em}
 .card-v .desc img{max-width:100%;border-radius:6px}
+.card-v .desc.editing{border-color:var(--accent);background:var(--bg);cursor:text;min-height:140px;outline:none;white-space:pre-wrap;overflow-wrap:anywhere}
+.card-v .desc.editing p{margin:0}.card-v .desc.editing>:first-child{margin-top:0}.card-v .desc.editing ul{margin:.2em 0;padding-left:1.3em}.card-v .desc.editing pre{background:var(--bg2);border-radius:6px;padding:8px;font-size:12.5px;overflow:auto}
+.card-v .desc.editing a.wl,.card-v .desc.editing .rawmd{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:0 5px;text-decoration:none;color:var(--accent);white-space:nowrap}
+.card-v .dedit .desc.editing{margin:0}
+.card-v .att .atti{position:relative;display:inline-block}.card-v .att .atti .x{position:absolute;top:2px;right:2px;background:var(--bg);border-radius:50%;width:20px;height:20px;font-size:11px;opacity:.85}
+.card-v .links .lki{display:inline-flex;align-items:center;gap:0}.card-v .links .lki .x{font-size:11px;width:20px;height:20px;color:var(--fg3)}
 .card-v .dedit textarea{width:100%;min-height:200px;font:13.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:10px;border:1px solid var(--accent);border-radius:8px;background:var(--bg);color:var(--fg);resize:vertical}
 .card-v .dedit .row{display:flex;gap:6px;margin-top:6px;align-items:center}
 .card-v .cl{border:1px solid var(--line);border-radius:8px;padding:8px 12px 10px;display:flex;flex-direction:column;gap:2px}
@@ -471,7 +477,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
     <span class="pill" id="pillGroup">그룹 <select id="fGroup"><option value="project">프로젝트</option><option value="label">라벨</option></select></span>
     <input class="search" id="q" type="search" placeholder="검색" aria-label="검색">
     <span class="sp"></span>
-    <button class="icon" id="btnDocs" title="문서 — 폴더별 파일 보기와 마크다운 편집" aria-label="문서" aria-pressed="false"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></button>
+    <button class="icon" id="btnDocs" title="문서 — 폴더별 파일 보기" aria-label="문서" aria-pressed="false"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></button>
     <button class="icon" id="btnPalette" title="명령 (Ctrl+K)" aria-label="명령">⌘</button>
     <span class="qbadge" id="qbadge" hidden></span>
     <button class="icon" id="btnSettings" title="설정" aria-label="설정">⚙</button>
@@ -504,7 +510,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
     </div>
     <div class="props" id="pProps"></div>
     <div class="plist" id="pList" hidden></div>
-    <div class="ptools"><button class="btn sm" id="pAttach">이미지 첨부</button><button class="btn sm" id="pLink" title="다른 노트로 가는 링크 넣기">링크</button><span>이미지는 붙여넣기·드래그도 됩니다 · [[ 를 쳐도 링크 목록이 뜹니다</span><input type="file" id="pFile" accept="image/*" multiple hidden></div>
+    <div class="ptools"><button class="btn sm" id="pAttach">이미지 첨부</button><button class="btn sm" id="pLink" title="다른 노트로 가는 링크 넣기">링크</button><input type="file" id="pFile" accept="image/*" multiple hidden></div>
     <textarea id="pBody" spellcheck="false" aria-label="본문"></textarea>
     <div class="ac" id="pAc" role="listbox"></div>
     <div class="preview" id="pPreview" hidden></div>
@@ -1559,15 +1565,15 @@ async function openNote(n){
   $('#pBody').value=stripH1(n.body);$('#pMsg').textContent='';
   showPreview(false);renderLinks(n);
   const p=$('#panel');p.classList.add('open');p.setAttribute('aria-hidden','false');
-  // 문서 탭(도킹)은 마크다운 편집기, 그 외는 트렐로식 카드
-  const cardmode=!p.classList.contains('docked');p.classList.toggle('cardmode',cardmode);$('#card').hidden=!cardmode;$('#pToggle').style.display=cardmode?'none':'';
+  // 어디서 열든 같은 노트 화면이다 (파일 형식을 그대로 고치는 편집기는 없앴다)
+  const cardmode=true;p.classList.toggle('cardmode',cardmode);$('#card').hidden=!cardmode;$('#pToggle').style.display=cardmode?'none':'';
   paintHead(n);
   if(cardmode){descEditing=false;renderCard(n);}
-  if(p.classList.contains('docked')){p.querySelector('.editor .empty, .empty')?.remove();docsEl?.querySelectorAll('.tree .tn').forEach(b=>b.setAttribute('aria-current',b.textContent===n.title?'true':'false'));}
+  if(p.classList.contains('docked')){docsEl?.querySelector('.editor>.empty')?.remove();docsEl?.querySelectorAll('.tree .tn').forEach(b=>b.setAttribute('aria-current',b.textContent===n.title?'true':'false'));}
   else $('#dim').classList.add('on');
   if(window.innerWidth>640&&!cardmode)setTimeout(()=>$('#pBody').focus(),50);
 }
-function paintHead(n){const p=$('#pPath');p.textContent=$('#panel').classList.contains('cardmode')?kindLabel(n):n.path;p.title=n.path;$('#pType').textContent=kindLabel(n);}
+function paintHead(n){const p=$('#pPath');p.textContent=$('#panel').classList.contains('docked')?n.path:kindLabel(n);p.title=n.path;$('#pType').textContent=kindLabel(n);}
 const linkTargets=n=>[...new Set([...n.body.matchAll(/\[\[([^\]|#]+)/g)].map(m=>m[1].trim()).concat(Array.isArray(n.fm.related)?n.fm.related.map(s=>s.replace(/^\[\[|\]\]$/g,'').split('|')[0].trim()):[]))];
 const findNote=name=>notes.find(x=>x.title===name||x.path.endsWith('/'+name+'.md')||x.path===name+'.md');
 function renderLinks(n){
@@ -1577,7 +1583,7 @@ function renderLinks(n){
   if(out.length){box.append(el('h4',{},'이 노트가 가리키는 곳'));for(const t of out)box.append(mk(t,findNote(t)));}
   if(back.length){box.append(el('h4',{},'이 노트를 가리키는 노트'));for(const x of back)box.append(mk(x.title,x));}
 }
-function isDirty(){if(!current)return false;if($('#panel').classList.contains('cardmode'))return descEditing&&$('#card .dedit textarea')&&$('#card .dedit textarea').value!==stripH1(current.body);if($('#pTitle').value.trim()!==current.title)return true;if($('#pBody').value!==stripH1(current.body))return true;
+function isDirty(){if(!current)return false;if($('#panel').classList.contains('cardmode')){const ed=$('#card .desc.editing');return !!(descEditing&&ed&&editToMd(ed)!==ed.dataset.before);}if($('#pTitle').value.trim()!==current.title)return true;if($('#pBody').value!==stripH1(current.body))return true;
   const pp=panelPatch();return ['status','due'].some(k=>(pp[k]||'')!==(current.fm[k]||''))||JSON.stringify(labelsOf({fm:{label:pp.label}}))!==JSON.stringify(labelsOf(current));}
 async function guardDirty(){if(!isDirty())return true;return confirmAsk('저장하지 않은 변경이 있습니다',`"${current.title}" — 저장하지 않고 넘어갈까요?`,'저장 안 함');}
 async function closePanel(){
@@ -1798,21 +1804,95 @@ function todoLine(indent,text,{done=false,due=null,doneDate=null}={}){
 }
 /* ===================== 트렐로식 카드 보기 ===================== */
 let descEditing=false;const actCache={};
-/* 본문을 설명 / 체크리스트 묶음으로 나눈다. 묶음 = 가장 가까운 ## 제목 아래의 - [ ] 줄들 */
+/* 본문을 설명 / 체크리스트 / 첨부 / 연결로 나눈다. 화면에서는 파일 형식(마크다운)을 보이지 않는다.
+   kind[i]: 줄마다 'desc'(설명) · 'cl'(체크리스트 제목·항목) · 'img'(이미지만 있는 줄) · 'link'("## 연결" 묶음) */
+const IMG_LINE=/^\s*(?:!\[[^\]]*\]\([^)\s]+\)|!\[\[[^\]]+\]\])\s*$/;const LINK_LINE=/^\s*[-*]\s*\[\[([^\]|]+)(?:\|[^\]]*)?\]\]\s*$/;
 function splitBody(body){
-  const lines=stripH1(body).split('\n');const groups=[];let cur=null,heading='',headLine=-1;const descLines=[];
-  lines.forEach((ln,i)=>{const h=ln.match(/^(#{2,6})\s+(.+)$/);
-    if(h){heading=h[2].trim();headLine=i;cur=null;descLines.push({i,ln,h:true});return;}
-    const t=parseTodo(ln);
-    if(t){if(!cur||cur.heading!==heading){cur={heading,headLine,items:[]};groups.push(cur);}cur.items.push({...t,line:i});return;}
-    descLines.push({i,ln});});
-  // 내용이 전혀 없는 ## 섹션은 빈 체크리스트로 본다
-  const heads=descLines.filter(d=>d.h);for(const d of heads){const next=heads.find(x=>x.i>d.i);const end=next?next.i:lines.length;const content=lines.slice(d.i+1,end);if(content.every(l=>!l.trim())&&!groups.some(g=>g.headLine===d.i)){groups.push({heading:d.ln.replace(/^#+\s+/,'').trim(),headLine:d.i,items:[],empty:true});}}
-  groups.sort((a,b)=>a.headLine-b.headLine);
-  // 설명: 체크리스트만 들어 있던 제목 줄은 뺀다
-  const onlyCl=new Set(groups.map(g=>g.headLine));
-  const desc=descLines.filter(d=>!(d.h&&onlyCl.has(d.i)&&!descLines.some(x=>!x.h&&x.i>d.i&&x.ln.trim()&&(lines.slice(d.i+1,x.i).every(l=>parseTodo(l)||!l.trim()))))&&!(d.h&&groups.some(g=>g.headLine===d.i&&g.empty))).map(d=>d.ln).join('\n').replace(/\n{3,}/g,'\n\n').trim();
-  return{groups,desc,lines};
+  const lines=stripH1(body).split('\n');const kind=lines.map(()=>'desc');const groups=[];const linkLines=[];
+  const heads=[];let fence=false;lines.forEach((ln,i)=>{if(/^```/.test(ln)){fence=!fence;return;}if(!fence&&/^#{2,6}\s+\S/.test(ln))heads.push(i);});
+  const secs=[{head:-1,from:0,to:heads.length?heads[0]:lines.length},...heads.map((h,k)=>({head:h,from:h+1,to:heads[k+1]??lines.length}))];
+  for(const sc of secs){
+    const heading=sc.head>=0?lines[sc.head].replace(/^#+\s+/,'').trim():'';
+    const content=[];for(let i=sc.from;i<sc.to;i++)if(lines[i].trim())content.push(i);
+    const items=content.filter(i=>parseTodo(lines[i]));
+    if(sc.head>=0&&heading==='연결'&&content.length&&content.every(i=>LINK_LINE.test(lines[i]))){for(let i=sc.head;i<sc.to;i++)kind[i]='link';content.forEach(i=>linkLines.push({line:i,target:lines[i].match(LINK_LINE)[1].trim()}));continue;}
+    if(items.length){
+      // 제목 아래에 항목이 하나라도 있으면 그 제목은 체크리스트 이름이다
+      groups.push({heading,headLine:sc.head,items:items.map(i=>({...parseTodo(lines[i]),line:i}))});items.forEach(i=>kind[i]='cl');
+      if(sc.head>=0){kind[sc.head]='cl';if(items.length===content.length)for(let i=sc.from;i<sc.to;i++)kind[i]='cl';}
+    }else if(sc.head>=0&&!content.length){groups.push({heading,headLine:sc.head,items:[],empty:true});for(let i=sc.head;i<sc.to;i++)kind[i]='cl';}
+  }
+  lines.forEach((ln,i)=>{if(kind[i]==='desc'&&IMG_LINE.test(ln))kind[i]='img';});
+  const desc=lines.filter((_,i)=>kind[i]==='desc').join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  return{groups,desc,lines,kind,linkLines};
+}
+/* 설명만 바꿔 본문을 다시 만든다: 설명 → 체크리스트 → 첨부 → 연결 순서. 설명이 아닌 줄은 그대로 둔다 */
+function composeBody(body,newDesc){
+  const{lines,kind}=splitBody(body);const out=[];let needHead=true;
+  const push=(ln,k)=>{if(!ln.trim())return;const isHead=/^#{2,6}\s+\S/.test(ln);
+    if(k==='cl'&&!isHead&&needHead){out.push('','## 체크리스트');}   // 제목 없는 항목이 설명의 마지막 소제목 아래로 들어가지 않게
+    if(isHead)out.push('');needHead=false;out.push(ln);};
+  for(const k of ['cl','img','link']){let first=true;lines.forEach((ln,i)=>{if(kind[i]!==k)return;if(first&&k!=='cl'&&ln.trim()&&!/^#{2,6}\s/.test(ln))out.push('');first=false;if(k!=='cl')needHead=false;push(ln,k);if(k==='cl'&&/^#{2,6}\s+\S/.test(ln))needHead=false;});if(k==='cl')needHead=false;}
+  return (String(newDesc||'').replace(/\s+$/,'')+'\n'+out.join('\n')).replace(/^\n+/,'').replace(/\n{3,}/g,'\n\n').replace(/\s*$/,'\n');
+}
+/* ---- 설명 편집기: 마크다운을 보이지 않고 서식 그대로 고친다 (줄 하나 = 블록 하나) ---- */
+function mdInline(text,into){
+  const re=/(\*\*([^*\n]+)\*\*)|(!\[([^\]]*)\]\(([^)\s]+)\))|(!\[\[([^\]]+)\]\])|(\[\[([^\]|]+)(?:\|([^\]]+))?\]\])|(\[([^\]\n]+)\]\((https?:[^)\s]+)\))|(`([^`\n]+)`)/g;let last=0,m;
+  while((m=re.exec(text))){
+    if(m.index>last)into.append(text.slice(last,m.index));last=m.index+m[0].length;
+    if(m[1])into.append(el('b',{},m[2]));
+    else if(m[3]||m[6])into.append(el('span',{class:'rawmd',contenteditable:'false','data-md':m[0]},'🖼 '+(m[4]||(m[5]||m[7]||'').split('/').pop()||'이미지')));
+    else if(m[8])into.append(el('a',{class:'wl',href:'#',contenteditable:'false','data-wl':m[9],'data-al':m[10]||''},m[10]||m[9]));
+    else if(m[11])into.append(el('a',{href:m[13],'data-href':m[13],target:'_blank',rel:'noopener'},m[12]));
+    else if(m[14])into.append(el('code',{},m[15]));
+  }
+  if(last<text.length)into.append(text.slice(last));
+}
+function mdToEdit(md,root){
+  root.innerHTML='';const lines=String(md||'').split('\n');let ul=null;
+  for(let i=0;i<lines.length;i++){const ln=lines[i];
+    if(/^```/.test(ln)){let j=i+1;while(j<lines.length&&!/^```/.test(lines[j]))j++;const raw=lines.slice(i,Math.min(j+1,lines.length)).join('\n');ul=null;
+      root.append(el('pre',{contenteditable:'false','data-md':raw},lines.slice(i+1,j).join('\n')));i=j;continue;}
+    const h=ln.match(/^(#{1,6})\s+(.*)$/);const li=ln.match(/^\s*[-*]\s+(.*)$/);
+    if(li&&!parseTodo(ln)){if(!ul){ul=el('ul',{});root.append(ul);}const x=el('li',{});mdInline(li[1],x);if(!x.childNodes.length)x.append(el('br'));ul.append(x);continue;}
+    ul=null;
+    if(h){const x=el('h3',{'data-l':String(Math.max(2,h[1].length))});mdInline(h[2],x);root.append(x);continue;}
+    const pEl=el('p',{});if(ln.trim())mdInline(ln,pEl);else pEl.append(el('br'));root.append(pEl);
+  }
+  if(!root.childNodes.length)root.append(el('p',{},el('br')));
+}
+const BLOCK_TAG=/^(DIV|P|LI|H[1-6]|UL|OL|PRE|BLOCKQUOTE)$/;
+function inlineNode(c){
+  if(c.nodeType===3)return c.nodeValue.replace(/ /g,' ');
+  if(c.nodeType!==1)return'';const t=c.tagName;
+  if(c.dataset&&c.dataset.md)return c.dataset.md;
+  if(t==='BR')return'\n';
+  if(t==='A'&&c.classList.contains('wl'))return`[[${c.dataset.wl}${c.dataset.al?'|'+c.dataset.al:''}]]`;
+  const inner=editInline(c);
+  if(t==='B'||t==='STRONG'){const tx=inner.trim();return tx?(inner.match(/^\s*/)[0]+`**${tx}**`+inner.match(/\s*$/)[0]):inner;}
+  if(t==='CODE')return inner.trim()?'`'+inner+'`':inner;
+  if(t==='A'&&(c.dataset.href||c.getAttribute('href'))){const u=c.dataset.href||c.getAttribute('href');return /^https?:/.test(u)&&inner.trim()&&inner.trim()!==u?`[${inner.trim()}](${u})`:inner;}
+  return inner;
+}
+function editInline(node){let o='';for(const c of node.childNodes){const tx=inlineNode(c);o+=(c.nodeType===1&&BLOCK_TAG.test(c.tagName)&&o&&!o.endsWith('\n')?'\n':'')+tx;}return o;}
+function editToMd(root){
+  const out=[];const line=tx=>{for(const l of tx.replace(/\n+$/,'').split('\n'))out.push(l);};
+  const walk=node=>{let buf='';const flush=()=>{if(buf.trim())line(buf);buf='';};
+    for(const c of node.childNodes){
+      const t=c.nodeType===1?c.tagName:'';
+      if(c.nodeType===3||(c.nodeType===1&&!BLOCK_TAG.test(t)&&t!=='BR')){buf+=inlineNode(c);continue;}
+      if(c.nodeType!==1)continue;
+      if(t==='BR'){if(buf.trim())flush();else out.push('');continue;}
+      flush();
+      if(c.dataset&&c.dataset.md&&t==='PRE'){line(c.dataset.md);continue;}
+      if(t==='UL'||t==='OL'){let k=0;for(const li of c.children){k++;if(li.tagName!=='LI'){walk(li);continue;}const tx=editInline(li).replace(/\n+$/,'');const ls=tx.split('\n');out.push((t==='OL'?`${k}. `:'- ')+ls[0]);for(const more of ls.slice(1))out.push('  '+more);}continue;}
+      if(/^H[1-6]$/.test(t)){const tx=editInline(c).replace(/\n/g,' ').trim();out.push(tx?'#'.repeat(Math.max(2,+(c.dataset.l||2)))+' '+tx:'');continue;}
+      if([...c.children].some(x=>BLOCK_TAG.test(x.tagName))){walk(c);continue;}   // 블록 안의 블록 (브라우저가 p 안에 목록을 넣는 경우 등)
+      line(editInline(c));
+    }
+    flush();};
+  walk(root);
+  return out.join('\n').replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
 }
 function renderCard(n){
   const box=$('#card');box.innerHTML='';const{groups,desc}=splitBody(n.body);
@@ -1841,12 +1921,23 @@ function renderCard(n){
     sp?el('button',{class:'chip',onclick:()=>saveNote(n,{project:pjLink(sp),'suggest-project':''},undefined,undefined,true)},`프로젝트: ${sp}`):'',
     ...sl.map(l=>el('button',{class:'chip',onclick:()=>saveNote(n,{label:packLabels([...labelsOf(n),l]),'suggest-label':packLabels(sl.filter(x=>x!==l))},undefined,undefined,true)},`라벨: ${labelOpt(l).name}`)),
     el('button',{class:'chip',style:'border-color:var(--line);color:var(--fg2)',onclick:()=>saveNote(n,{'suggest-project':'','suggest-label':''},undefined,undefined,true)},'제안 지우기'))));}
-  // 설명
+  // 설명 — 서식 그대로 고친다 (마크다운 기호는 보이지 않는다)
   const sec=el('section',{});sec.append(el('h3',{},'설명',el('span',{class:'sp'}),descEditing?'':el('button',{class:'btn sm',onclick:()=>{descEditing=true;renderCard(n);}},desc?'편집':'추가')));
   if(descEditing){
-    const ta=el('textarea',{spellcheck:'false','aria-label':'본문 마크다운'});ta.value=stripH1(n.body);acAttach(ta);
-    const ed=el('div',{class:'dedit'},ta,el('div',{class:'row'},el('button',{class:'btn primary sm',onclick:async()=>{descEditing=false;await saveNote(n,{},undefined,ta.value,true);renderCard(n);}},'저장'),el('button',{class:'btn sm',onclick:()=>{descEditing=false;renderCard(n);}},'취소'),el('button',{class:'btn sm',title:'다른 노트로 가는 링크 넣기',onclick:()=>insertLink(ta)},'링크'),el('span',{class:'evnote'},'마크다운 전체를 편집합니다 (체크리스트 포함)')));
-    sec.append(ed);box.append(sec);setTimeout(()=>ta.focus(),30);
+    const ed=el('div',{class:'desc editing',contenteditable:'true',role:'textbox','aria-multiline':'true','aria-label':'설명',spellcheck:'false'});mdToEdit(desc,ed);const before=editToMd(ed);ed.dataset.before=before;
+    try{document.execCommand('defaultParagraphSeparator',false,'p');}catch{}
+    ed.addEventListener('paste',e=>{const fs=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));e.preventDefault();if(fs.length){attachFiles(fs);return;}
+      const tx=e.clipboardData?.getData('text/plain')||'';if(tx)document.execCommand('insertText',false,tx);});
+    ed.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();save();}});
+    const save=async()=>{const now=editToMd(ed);descEditing=false;if(now!==before)await saveNote(n,{},undefined,composeBody(n.body,now),true);renderCard(n);};
+    const fmt=(label,title,fn)=>el('button',{type:'button',class:'btn sm',title,onmousedown:e=>e.preventDefault(),onclick:()=>{ed.focus();fn();}},label);
+    const inBlock=tag=>{let x=getSelection().anchorNode;while(x&&x!==ed){if(x.nodeType===1&&x.tagName===tag)return true;x=x.parentNode;}return false;};
+    const bar=el('div',{class:'row'},el('button',{class:'btn primary sm',onclick:save},'저장'),el('button',{class:'btn sm',onclick:()=>{descEditing=false;renderCard(n);}},'취소'),el('span',{class:'sp'}),
+      fmt('굵게','고른 글자를 굵게',()=>document.execCommand('bold')),
+      fmt('소제목','이 줄을 소제목으로 / 되돌리기',()=>document.execCommand('formatBlock',false,inBlock('H3')?'p':'h3')),
+      fmt('목록','이 줄을 목록으로 / 되돌리기',()=>document.execCommand('insertUnorderedList')));
+    sec.append(el('div',{class:'dedit'},ed,bar));box.append(sec);
+    setTimeout(()=>{ed.focus();try{const r=document.createRange();r.selectNodeContents(ed);r.collapse(false);const sl=getSelection();sl.removeAllRanges();sl.addRange(r);}catch{}},30);
   }else{
     const d=el('div',{class:'desc'+(desc?'':' empty'),onclick:e=>{if(e.target.closest('a'))return;descEditing=true;renderCard(n);}});
     if(desc){d.innerHTML=mdToHtml(desc);d.querySelectorAll('img[data-src]').forEach(async im=>{const u=im.dataset.src;if(/^https?:/.test(u)){im.src=u;return;}const path=decodeURI(u.replace(/^\.?\//,''));const key='img:'+path;if(imgCache[key]){im.src=imgCache[key];return;}try{const b=await api.fileB64(path);if(b){const ext=path.split('.').pop().toLowerCase();im.src=imgCache[key]=`data:${ext==='svg'?'image/svg+xml':ext==='jpg'?'image/jpeg':'image/'+ext};base64,${b}`;}}catch{}});
@@ -1882,7 +1973,7 @@ function renderCard(n){
   for(const g of groups){
     const done=g.items.filter(i=>i.done).length,pct=g.items.length?Math.round(done/g.items.length*100):0;
     const cl=el('div',{class:'cl'});
-    cl.append(el('div',{class:'clh'},el('b',{},g.heading||'체크리스트'),el('span',{class:'evnote'},`${done}/${g.items.length}`),g.heading?el('button',{class:'icon x','aria-label':'체크리스트 삭제',title:'이 묶음의 항목을 모두 지웁니다',onclick:async()=>{if(g.items.length&&!await confirmAsk('체크리스트를 지울까요?',`"${g.heading}"의 항목 ${g.items.length}개가 지워집니다.`,'지우기'))return;const lines=stripH1(n.body).split('\n');const del=new Set([g.headLine,...g.items.map(i=>i.line)]);if(g.headLine>=0&&lines[g.headLine+1]!==undefined&&!lines[g.headLine+1].trim()&&!g.items.length)del.add(g.headLine+1);await saveNote(n,{},undefined,lines.filter((_,i)=>!del.has(i)).join('\n'),true);}},'✕'):''));
+    cl.append(el('div',{class:'clh'},el('b',{},g.heading||'체크리스트'),el('span',{class:'evnote'},`${done}/${g.items.length}`),true?el('button',{class:'icon x','aria-label':'체크리스트 삭제',title:'이 묶음의 항목을 모두 지웁니다',onclick:async()=>{if(g.items.length&&!await confirmAsk('체크리스트를 지울까요?',`"${g.heading||'체크리스트'}"의 항목 ${g.items.length}개가 지워집니다.`,'지우기'))return;const lines=stripH1(n.body).split('\n');const del=new Set([...(g.headLine>=0?[g.headLine]:[]),...g.items.map(i=>i.line)]);if(g.headLine>=0&&lines[g.headLine+1]!==undefined&&!lines[g.headLine+1].trim()&&!g.items.length)del.add(g.headLine+1);await saveNote(n,{},undefined,lines.filter((_,i)=>!del.has(i)).join('\n'),true);}},'✕'):''));
     cl.append(el('div',{class:'clbar'+(done===g.items.length&&g.items.length?' full':'')},el('b',{style:`width:${pct}%`})));
     for(const it of g.items){
       const ci=el('div',{class:'ci'+(it.done?' done':'')});
@@ -1894,20 +1985,33 @@ function renderCard(n){
       const lines=stripH1(n.body).split('\n');const last=g.items.length?g.items[g.items.length-1].line:g.headLine;lines.splice(last+1,0,`- [ ] ${text}${w?' 📅 '+w.due:''}`);add.value='';await saveNote(n,{},undefined,lines.join('\n'),true);};
     cl.append(el('form',{class:'add',onsubmit:e=>{e.preventDefault();addGo();}},add,el('button',{type:'submit',class:'btn sm'},'추가')));cls.append(cl);
   }
-  if(!groups.length)cls.append(el('div',{class:'evnote'},'없습니다. "+ 체크리스트"로 만들거나 설명에 - [ ] 줄을 쓰세요.'));
+  if(!groups.length)cls.append(el('div',{class:'evnote'},'없습니다. "+ 체크리스트"로 만듭니다.'));
   box.append(cls);
   // 첨부
   const imgs=[...stripH1(n.body).matchAll(/!\[[^\]]*\]\(([^)\s]+)\)|!\[\[([^\]|]+\.(?:png|jpe?g|gif|webp|svg))(?:\|[^\]]*)?\]\]/gi)].map(m=>m[1]||('_attachments/'+m[2]));
   const at=el('section',{});at.append(el('h3',{},'첨부',el('span',{class:'sp'}),el('button',{class:'btn sm',onclick:()=>$('#pFile').click()},'+ 이미지')));
-  if(imgs.length){const row=el('div',{class:'att'});for(const u of imgs){const im=el('img',{alt:u.split('/').pop(),title:u});row.append(im);(async()=>{if(/^https?:/.test(u)){im.src=u;return;}const path=decodeURI(u.replace(/^\.?\//,''));const key='img:'+path;if(imgCache[key]){im.src=imgCache[key];return;}try{const b=await api.fileB64(path);if(b){const ext=path.split('.').pop().toLowerCase();im.src=imgCache[key]=`data:${ext==='svg'?'image/svg+xml':ext==='jpg'?'image/jpeg':'image/'+ext};base64,${b}`;}}catch{}})();}at.append(row);}
-  else at.append(el('div',{class:'evnote'},'없습니다. 붙여넣기·드래그로도 넣을 수 있습니다.'));
+  if(imgs.length){const row=el('div',{class:'att'});for(const u of imgs){const im=el('img',{alt:u.split('/').pop(),title:u.split('/').pop()});
+      row.append(el('span',{class:'atti'},im,el('button',{class:'icon x','aria-label':'첨부 빼기',title:'이 노트에서 뺍니다',onclick:async()=>{
+        const hit=m=>(m[1]||('_attachments/'+m[2]))===u;const re=/!\[[^\]]*\]\(([^)\s]+)\)|!\[\[([^\]|]+\.(?:png|jpe?g|gif|webp|svg))(?:\|[^\]]*)?\]\]/gi;
+        const out=[];for(const l of stripH1(n.body).split('\n')){const l2=l.replace(re,(...m)=>hit(m)?'':m[0]);if(l2!==l&&!l2.trim())continue;out.push(l2);}
+        await saveNote(n,{},undefined,out.join('\n'),true);}},'✕')));(async()=>{if(/^https?:/.test(u)){im.src=u;return;}const path=decodeURI(u.replace(/^\.?\//,''));const key='img:'+path;if(imgCache[key]){im.src=imgCache[key];return;}try{const b=await api.fileB64(path);if(b){const ext=path.split('.').pop().toLowerCase();im.src=imgCache[key]=`data:${ext==='svg'?'image/svg+xml':ext==='jpg'?'image/jpeg':'image/'+ext};base64,${b}`;}}catch{}})();}at.append(row);}
+  else at.append(el('div',{class:'evnote'},'없습니다. "+ 이미지"로 넣습니다.'));
   box.append(at);
-  // 연결 (링크·백링크)
-  const lk=el('section',{});lk.append(el('h3',{},'연결'));const lbox=el('div',{class:'links'});lk.append(lbox);box.append(lk);
-  {const out=linkTargets(n);const back=notes.filter(x=>x!==n&&linkTargets(x).some(t=>findNote(t)===n));const mk=(name,target)=>el('button',{onclick:()=>target?openNote(target):toast('아직 없는 노트입니다')},name+(target?'':' (없음)'));
-    if(out.length){lbox.append(el('h4',{},'이 노트가 가리킴'));for(const t of out)lbox.append(mk(t,findNote(t)));}
+  // 연결 (링크·백링크) — 노트를 골라 잇는다
+  const lk=el('section',{});lk.append(el('h3',{},'연결',el('span',{class:'sp'}),el('button',{class:'btn sm',onclick:()=>pickNote(async t=>{if(t===n)return;
+    if(linkTargets(n).some(x=>findNote(x)===t)){toast('이미 연결돼 있습니다');return;}
+    const{lines,linkLines}=splitBody(n.body);const row=`- [[${t.title}]]`;
+    if(linkLines.length)lines.splice(linkLines[linkLines.length-1].line+1,0,row);else{while(lines.length&&!lines[lines.length-1].trim())lines.pop();lines.push('','## 연결',row);}
+    await saveNote(n,{},undefined,lines.join('\n'),true);})},'+ 연결')));
+  const lbox=el('div',{class:'links'});lk.append(lbox);box.append(lk);
+  {const{linkLines}=splitBody(n.body);const out=linkTargets(n);const back=notes.filter(x=>x!==n&&linkTargets(x).some(t=>findNote(t)===n));
+    const mk=(name,target,ll)=>el('span',{class:'lki'},el('button',{onclick:()=>target?openNote(target):toast('아직 없는 노트입니다')},name+(target?'':' (없음)')),
+      ll?el('button',{class:'icon x','aria-label':'연결 빼기',title:'연결을 뺍니다',onclick:async()=>{const{lines,linkLines:cur}=splitBody(n.body);const hit=cur.find(x=>x.target===ll.target);if(!hit)return;lines.splice(hit.line,1);
+        if(cur.length===1){const hi=lines.findIndex((l,i)=>/^#{2,6}\s+연결\s*$/.test(l)&&i<hit.line);if(hi>=0)lines.splice(hi,1);}
+        await saveNote(n,{},undefined,lines.join('\n').replace(/\n{3,}/g,'\n\n'),true);}},'✕'):'');
+    if(out.length){lbox.append(el('h4',{},'이 노트가 가리킴'));for(const t of out)lbox.append(mk(t,findNote(t),linkLines.find(x=>x.target===t)));}
     if(back.length){lbox.append(el('h4',{},'이 노트를 가리킴'));for(const b of back)lbox.append(mk(b.title,b));}
-    if(!out.length&&!back.length)lbox.append(el('div',{class:'evnote'},'없습니다. 설명에 [[노트 제목]]을 쓰면 연결됩니다.'));}
+    if(!out.length&&!back.length)lbox.append(el('div',{class:'evnote'},'없습니다. "+ 연결"로 다른 노트와 잇습니다.'));}
   // 활동 (GitHub 커밋)
   const act=el('section',{});act.append(el('h3',{},'활동',ty==='project'?el('span',{class:'evnote'},'· 이 프로젝트 노트의 변경 기록'):''));const al=el('div',{class:'act'},el('span',{class:'evnote'},'불러오는 중…'));act.append(al);box.append(act);
   (async()=>{try{const key=n.path+'@'+n.sha;let cs=actCache[key];if(!cs){cs=await api.req(`/repos/${cfg.repo}/commits?path=${encodeURIComponent(n.path)}&per_page=6&sha=${cfg.branch}`);actCache[key]=cs;}
@@ -1932,20 +2036,24 @@ async function shrinkImage(f,ext){
 }
 async function attachFiles(files){
   if(!current){toast('노트를 먼저 여세요');return;}
-  const ta=$('#pBody');
+  const n=current;const add=[];
   for(const f of files){if(!f.type.startsWith('image/'))continue;
     const ext=(f.name.split('.').pop()||'png').toLowerCase();const base=slug(f.name.replace(/\.[^.]+$/,''))||'image';
     const{b64,ext:ext2,type}=await shrinkImage(f,ext);
     const name=`${today()}-${base}-${Math.random().toString(36).slice(2,6)}.${ext2}`;const path=`_attachments/${name}`;
-    $('#pMsg').textContent=`업로드 중: ${name}`;
+    toast(`올리는 중: ${f.name}`,8000);
     try{await api.putB64(path,b64,null,`web: 첨부 ${name}`);imgCache['img:'+path]=`data:${type};base64,${b64}`;}
     catch(e){toast('업로드 실패: '+e.message,4000);continue;}
-    const md=`![${base}](${path})`;const st=ta.selectionStart??ta.value.length;
-    ta.value=ta.value.slice(0,st)+(st>0&&ta.value[st-1]!=='\n'?'\n':'')+md+'\n'+ta.value.slice(st);
-    $('#pMsg').textContent=`첨부됨: ${name} (저장을 눌러야 본문에 반영)`;}
-  if($('#panel').classList.contains('cardmode')&&current){await saveNote(current,{},undefined,ta.value,true);}
+    add.push(`![${base}](${path})`);}
+  if(!add.length)return;
+  // 편집 중인 설명이 있으면 먼저 반영하고 그 뒤에 붙인다
+  let body=stripH1(n.body);const ed=$('#card .desc.editing');if(descEditing&&ed){const now=editToMd(ed);if(now!==ed.dataset.before)body=composeBody(n.body,now);descEditing=false;}
+  await saveNote(n,{},undefined,body.replace(/\s*$/,'')+'\n\n'+add.join('\n')+'\n',true);toast('첨부했습니다');
 }
 $('#pAttach').onclick=()=>$('#pFile').click();
+$('#card').addEventListener('paste',e=>{if(e.target.closest('.desc.editing'))return;const fs=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));if(fs.length){e.preventDefault();attachFiles(fs);}});
+$('#card').addEventListener('dragover',e=>{if(e.dataTransfer?.types.includes('Files'))e.preventDefault();});
+$('#card').addEventListener('drop',e=>{const fs=[...(e.dataTransfer?.files||[])].filter(f=>f.type.startsWith('image/'));if(fs.length){e.preventDefault();attachFiles(fs);}});
 $('#pFile').onchange=e=>{attachFiles([...e.target.files]);e.target.value='';};
 $('#pBody').addEventListener('paste',e=>{const fs=[...(e.clipboardData?.files||[])].filter(f=>f.type.startsWith('image/'));if(fs.length){e.preventDefault();attachFiles(fs);}});
 $('#pBody').addEventListener('dragover',e=>{if(e.dataTransfer?.types.includes('Files'))e.preventDefault();});

@@ -266,38 +266,61 @@ def t_misc(pg):
     pg.click('#btnDocs');idle(pg);assert pg.is_visible('.tree') and pg.get_attribute('#btnDocs','aria-pressed')=='true';pg.click('#btnDocs');idle(pg);assert pg.locator('.calgrid .day').count()==42 and pg.get_attribute('#btnDocs','aria-pressed')=='false'
     tab(pg,'문서');assert not pg.is_visible('#quick') and pg.locator('.nside').count()==0,'문서 탭에는 메모 입력·옆 목록이 없어야 함'
     tree=pg.inner_text('.tree');assert 'Notes' in tree and 'Projects' in tree and 'Todos' not in tree and 'Cards' not in tree and 'Inbox' not in tree,tree
-    pg.click('.tree .tn:has-text("수납 아이디어")');idle(pg);assert pg.input_value('#pTitle')=='수납 아이디어' and pg.inner_text('#pPath')=='20_Notes/수납 아이디어.md'
-    pg.fill('#pBody','본문 수정');pg.click('#pSave');idle(pg);assert '본문 수정' in fget(pg,'20_Notes/수납 아이디어.md');shot(pg,'08-docs')
+    pg.click('.tree .tn:has-text("수납 아이디어")');idle(pg);assert pg.input_value('#card .ctitle')=='수납 아이디어' and pg.inner_text('#pPath')=='20_Notes/수납 아이디어.md'
+    # 문서 탭도 같은 노트 화면이다 — 마크다운 편집기는 없다
+    assert not pg.is_visible('#pBody') and not pg.is_visible('#pSave') and pg.is_visible('#card .desc')
+    pg.click('#card .desc');idle(pg,200);pg.keyboard.type('본문 수정');pg.click('#card .dedit button:text-is("저장")');idle(pg);assert '본문 수정' in fget(pg,'20_Notes/수납 아이디어.md');shot(pg,'08-docs')
     pg.keyboard.press('Control+k');idle(pg,200);pg.fill('#palInput','>새로');idle(pg,200);assert pg.locator('#palList button').count()>=4;pg.keyboard.press('Escape')
 def t_docs_rename(pg):
     tab(pg,'문서');pg.click('.tree .tn:has-text("정리는 버리는 것부터")');idle(pg)
-    pg.fill('#pTitle','버리는 것부터');pg.click('#pSave');idle(pg,700)
+    pg.fill('#card .ctitle','버리는 것부터');pg.press('#card .ctitle','Enter');idle(pg,900)
     assert '20_Notes/버리는 것부터.md' in files(pg) and '20_Notes/정리는 버리는 것부터.md' not in files(pg),files(pg)
-    assert pg.inner_text('#pPath')=='20_Notes/버리는 것부터.md' and pg.input_value('#pTitle')=='버리는 것부터'
+    assert pg.inner_text('#pPath')=='20_Notes/버리는 것부터.md' and pg.input_value('#card .ctitle')=='버리는 것부터'
     assert pg.locator('.tree .tn[aria-current=true]').count()==1
     pg.click('.tree .tn >> nth=0');idle(pg)
-    # 저장 안 한 변경이 있으면 묻는다
-    pg.fill('#pBody','임시');tab(pg,'노트');assert pg.is_visible('#ask.on') or pg.is_visible('#askOk');pg.click('#askOk');idle(pg)
-def t_links(pg):
-    # 문서 편집기: [[ 자동완성 — 키보드 Enter, 폰 키보드의 줄바꿈(beforeinput), 링크 버튼
-    tab(pg,'문서');pg.click('.tree .tn:has-text("수납 아이디어")');idle(pg)
-    pg.fill('#pBody','');pg.type('#pBody','가 [[주말');idle(pg,200);assert pg.is_visible('#pAc.on') and '주말에 볼 영상' in pg.inner_text('#pAc')
-    pg.press('#pBody','Enter');idle(pg,200);assert pg.input_value('#pBody')=='가 [[주말에 볼 영상]]' and not pg.is_visible('#pAc.on')
-    pg.type('#pBody',' [[옛 자');idle(pg,200)
-    cancelled=pg.evaluate("!document.querySelector('#pBody').dispatchEvent(new InputEvent('beforeinput',{inputType:'insertLineBreak',cancelable:true,bubbles:true}))")
-    assert cancelled and pg.input_value('#pBody').endswith('[[옛 자료]]'),pg.input_value('#pBody')
-    pg.click('#pLink');idle(pg,200);assert pg.get_attribute('#palInput','placeholder')=='링크할 노트 검색'
-    pg.fill('#palInput','버리는');idle(pg,200);assert pg.locator('#palList button').count()==1;pg.click('#palList button');idle(pg,200)
-    assert pg.input_value('#pBody').endswith('[[옛 자료]][[버리는 것부터]]'),pg.input_value('#pBody')
-    pg.click('#pSave');idle(pg);assert '[[버리는 것부터]]' in fget(pg,'20_Notes/수납 아이디어.md')
-    pg.keyboard.press('Control+k');idle(pg,200);assert pg.get_attribute('#palInput','placeholder')!='링크할 노트 검색' and '명령' in pg.inner_text('#palList') or True;pg.keyboard.press('Escape')
-    # 카드 설명: 링크 버튼과 자동완성
-    tab(pg,'노트');view(pg,'노트');open_row(pg,'수납장 문서 요약');pg.click('#card section h3 button:text-is("편집")');idle(pg,200)
-    ta='#card .dedit textarea';pg.click(ta);pg.keyboard.press('Control+End');pg.type(ta,'\n[[수납 아');idle(pg,200);assert pg.is_visible('#pAc.on')
-    pg.click('#pAc button >> nth=0');idle(pg,200);assert pg.input_value(ta).endswith('[[수납 아이디어]]'),pg.input_value(ta)
-    pg.click('#card .dedit button:text-is("링크")');idle(pg,200);pg.fill('#palInput','옛 메모');idle(pg,200);pg.click('#palList button >> nth=0');idle(pg,200)
-    assert pg.input_value(ta).endswith('[[수납 아이디어]][[옛 메모]]'),pg.input_value(ta)
-    pg.click('#card .dedit button:text-is("저장")');idle(pg);assert '[[옛 메모]]' in fget(pg,'20_Notes/수납장 문서 요약.md') and '옛 메모' in pg.inner_text('#card');close(pg)
+    # 저장 안 한 설명이 있으면 묻는다
+    pg.click('#card .desc');idle(pg,200);pg.keyboard.type('임시');assert pg.evaluate('isDirty()'),pg.evaluate("[descEditing,!!document.querySelector('#card .desc.editing'),current&&current.path]");tab(pg,'노트');assert pg.is_visible('#ask.on') or pg.is_visible('#askOk');pg.click('#askOk');idle(pg)
+def t_edit(pg):
+    """노트 편집: 파일 형식(마크다운)이 화면에 나오지 않는다"""
+    ED='#card .desc.editing';SAVE='#card .dedit button:text-is("저장")'
+    P='20_Notes/편집 시험.md'
+    pg.evaluate("p=>{__FILES[p]='---\\ntype: note\\n---\\n# 편집 시험\\n\\n## 체크리스트\\n- [ ] 테스트1\\n'}",P);assert pg.evaluate('softRefresh()');idle(pg)
+    tab(pg,'노트');view(pg,'노트');open_row(pg,'편집 시험')
+    # 체크리스트만 있는 노트: 설명을 눌러도 "## 체크리스트", "- [ ]" 가 나오지 않는다
+    assert pg.inner_text('#card .desc').strip()=='설명 추가…'
+    pg.click('#card .desc');idle(pg,200);tx=pg.inner_text(ED);assert tx.strip()=='' and pg.locator('#card textarea').count()==0,repr(tx)
+    pg.keyboard.type('첫 줄');pg.keyboard.press('Enter');pg.keyboard.type('둘째 줄');pg.click(SAVE);idle(pg)
+    c=fget(pg,P);assert '첫 줄\n둘째 줄\n\n## 체크리스트\n- [ ] 테스트1' in c,c
+    assert '테스트1' in pg.inner_text('#card .cl') and '첫 줄' in pg.inner_text('#card .desc') and '##' not in pg.inner_text('#card')
+    # 바꾼 것이 없으면 저장하지 않는다
+    n0=pg.evaluate('__LOG.length');pg.click('#card .desc');idle(pg,200);pg.click(SAVE);idle(pg);assert pg.evaluate('__LOG.length')==n0
+    # 체크리스트 항목은 화면에서 넣는다
+    pg.fill('#card .cl .add input','테스트2');pg.press('#card .cl .add input','Enter');idle(pg);c=fget(pg,P);assert '- [ ] 테스트1\n- [ ] 테스트2' in c and c.index('둘째 줄')<c.index('## 체크리스트'),c
+    # 서식: 소제목·목록·굵게·다른 노트 링크가 기호 없이 보이고, 고쳐도 그대로 남는다
+    pg.evaluate("p=>api.put(p,'---\\ntype: note\\n---\\n# 편집 시험\\n\\n## 요약\\n주장 **한 문장** 과 [[수납 아이디어]]\\n- 하나\\n- 둘\\n\\n끝 문단\\n\\n## 준비\\n- [x] 끝낸 것\\n\\n![그림](_attachments/a.png)\\n\\n## 연결\\n- [[옛 메모]]\\n',notes.find(n=>n.path===p).sha,'ext')",P)
+    close(pg);assert pg.evaluate('softRefresh()');idle(pg);open_row(pg,'편집 시험')
+    pg.click('#card .desc');idle(pg,200);tx=pg.inner_text(ED)
+    assert '요약' in tx and '하나' in tx and '한 문장' in tx and '수납 아이디어' in tx and not any(k in tx for k in ['##','**','[[','- [','![','옛 메모','끝낸 것']),repr(tx)
+    shot(pg,'13-edit')
+    assert pg.locator(ED+' h3').count()==1 and pg.locator(ED+' li').count()==2 and pg.locator(ED+' b').count()==1 and pg.locator(ED+' a.wl').count()==1
+    pg.keyboard.press('Control+End');pg.keyboard.type(' 덧붙임');pg.click(SAVE);idle(pg);c=fget(pg,P)
+    assert '## 요약\n주장 **한 문장** 과 [[수납 아이디어]]\n- 하나\n- 둘\n\n끝 문단 덧붙임\n' in c,c
+    assert '## 준비\n- [x] 끝낸 것' in c and '![그림](_attachments/a.png)' in c and c.rstrip().endswith('## 연결\n- [[옛 메모]]'),c
+    # 서식 단추
+    pg.click('#card .desc');idle(pg,200);pg.keyboard.press('Control+End');pg.keyboard.press('Enter');pg.keyboard.type('새 소제목');pg.click('#card .dedit button:text-is("소제목")');pg.keyboard.press('Enter');pg.keyboard.type('목록 항목');pg.click('#card .dedit button:text-is("목록")')
+    pg.click(SAVE);idle(pg);c=fget(pg,P);assert '## 새 소제목' in c.replace('###','##') and '- 목록 항목' in c,c
+    # 연결: 골라서 잇고, ✕ 로 뺀다
+    assert '옛 메모' in pg.inner_text('#card .links') and '수납 아이디어' in pg.inner_text('#card .links')
+    pg.click('#card section h3 button:text-is("+ 연결")');idle(pg,200);pg.fill('#palInput','주말에');idle(pg,200);pg.click('#palList button >> nth=0');idle(pg)
+    c=fget(pg,P);assert '## 연결\n- [[옛 메모]]\n- [[주말에 볼 영상]]' in c,c
+    pg.click('#card .links .lki:has-text("옛 메모") .x');idle(pg);c=fget(pg,P);assert '[[옛 메모]]' not in c and '- [[주말에 볼 영상]]' in c,c
+    assert pg.locator('#card .links .lki:has-text("수납 아이디어") .x').count()==0,'글 속의 링크는 연결 목록에서 빼지 않는다'
+    pg.click('#card .links .lki:has-text("주말에 볼 영상") .x');idle(pg);c=fget(pg,P);assert '## 연결' not in c,c
+    # 첨부: ✕ 로 뺀다
+    assert pg.locator('#card .att img').count()==1;pg.click('#card .att .atti .x');idle(pg);c=fget(pg,P);assert 'a.png' not in c and '끝낸 것' in c,c
+    # 안내 문구에도 기호가 없다
+    body=pg.inner_text('#card');assert not any(k in body for k in ['[[','- [ ]','마크다운']),body
+    close(pg)
 def t_settings(pg):
     pg.click('#btnSettings');idle(pg,200);tabs=pg.inner_text('#settings .mh');assert '저장한 보기' not in tabs and '뷰' not in pg.inner_text('#settings')
     pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
@@ -349,15 +372,16 @@ def t_unit(pg):
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
-TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_links,t_settings,t_offline,t_stale]
+TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_settings,t_offline,t_stale,t_edit]
+if os.environ.get('ONLY'):TESTS=[x for x in TESTS if x.__name__ in os.environ['ONLY'].split(',')]   # 일부만: ONLY=t_edit python3 tests/run.py
 with sync_playwright() as p:
-    b=p.chromium.launch();pg=b.new_page(viewport={'width':1280,'height':860});errs=[]
+    b=p.chromium.launch();pg0=None;pg=b.new_page(viewport={'width':1280,'height':860});errs=[]
     pg.on('pageerror',lambda e:errs.append(str(e)));pg.on('console',lambda m:errs.append('console: '+m.text) if m.type=='error' else None)
     pg.goto(MOCK+'?gcal=1');pg.wait_for_selector('#main table, #main .status');idle(pg,900)
     for t in TESTS:
         try:t(pg);results.append((t.__name__,'ok',''))
         except Exception as e:
-            results.append((t.__name__,'FAIL','line '+str(traceback.extract_tb(e.__traceback__)[-1].lineno)+' '+''.join(traceback.format_exception_only(type(e),e)).strip()[:500]))
+            results.append((t.__name__,'FAIL','line '+str(traceback.extract_tb(e.__traceback__)[-1].lineno)+' '+''.join(traceback.format_exception_only(type(e),e)).strip()[:int(os.environ.get('ERRLEN','500'))]))
             if SHOTS:pg.screenshot(path=os.path.join(SHOTS,'FAIL-'+t.__name__+'.png'))
             for sel in ['#askCancel','#pClose']:
                 try:
@@ -382,11 +406,10 @@ with sync_playwright() as p:
         m.fill('.tdadd input[type=text]','폰 엔터');m.press('.tdadd input[type=text]','Enter');idle(m);assert '20_Notes/폰 엔터.md' in files(m)
         assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'추가 뒤 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'10-mobile-todo.png'))
-        tab(m,'문서');m.click('.tree .tn:has-text("수납 아이디어")');idle(m);m.click('#pBody');m.keyboard.press('Control+End');m.type('#pBody','\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n[[');idle(m,300)
-        bx=m.evaluate("(()=>{const r=document.querySelector('#pAc').getBoundingClientRect();return [r.top,r.bottom,r.left,r.right,innerWidth,innerHeight]})()")
-        assert m.is_visible('#pAc.on') and bx[0]>=0 and bx[1]<=bx[5] and bx[2]>=0 and bx[3]<=bx[4],bx
-        if SHOTS:m.screenshot(path=os.path.join(SHOTS,'11-mobile-link.png'))
-        m.tap('#pAc button >> nth=1') if False else m.click('#pAc button >> nth=1');idle(m,200);assert ']]' in m.input_value('#pBody') and not m.is_visible('#pAc.on')
+        tab(m,'문서');m.click('.tree .tn:has-text("수납 아이디어")');idle(m);assert m.is_visible('#card .desc') and not m.is_visible('#pBody')
+        m.click('#card .desc');idle(m,200);m.keyboard.type('폰에서 쓴 설명');assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'설명 편집 중 가로 스크롤'
+        if SHOTS:m.screenshot(path=os.path.join(SHOTS,'11-mobile-edit.png'))
+        m.click('#card .dedit button:text-is("저장")');idle(m);assert '폰에서 쓴 설명' in fget(m,'20_Notes/수납 아이디어.md')
         results.append(('mobile','ok',''))
     except Exception as e:results.append(('mobile','FAIL',str(e)[:300]))
     b.close()
