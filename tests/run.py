@@ -78,11 +78,17 @@ def t_views(pg):
     assert '업무' in pg.inner_text('.lchips');pg.click('.lchips button[data-v="work"]');idle(pg)
     assert pg.eval_on_selector_all('.prow[data-p]','e=>e.map(x=>x.dataset.p)')==['블로그 개편'];pg.click('.lchips button[data-v="work"]');idle(pg);assert pg.locator('.prow[data-p]').count()==2 and pg.locator('.ptile').count()==0 and '새 프로젝트' not in pg.inner_text('#main')
     shot(pg,'02-project-home')
-    # 프로젝트가 많으면: 줄에는 진행 중인 것 최대 8개(최근에 연 것 우선), 나머지는 '외 N개' → 전체 목록
-    pg.evaluate("(async()=>{for(let i=1;i<=10;i++)await createNote({type:'project',title:'P'+String(i).padStart(2,'0'),quiet:true});render();})()");idle(pg,900)
-    names=pg.eval_on_selector_all('.pbarx button[data-p]','e=>e.map(x=>x.dataset.p)');assert len(names)==8 and '블로그 개편' not in names and '외 4개' in pg.inner_text('.pbarx .more'),names
-    pg.click('.prow[data-p="블로그 개편"]');idle(pg);assert pg.get_attribute('.pbarx button[data-p="블로그 개편"]','aria-pressed')=='true' and pg.locator('.pbarx button[data-p]').count()==9
-    pg.click('.pbarx .more');idle(pg);assert pg.locator('.prow[data-p]').count()==12
+    # 프로젝트가 많으면: 위 줄에는 진행 중인 것 중 목록 순서로 앞의 3개, 나머지는 '외 N개' → 전체 목록
+    pg.evaluate("(async()=>{for(let i=1;i<=5;i++)await createNote({type:'project',title:'P'+String(i).padStart(2,'0'),quiet:true});render();})()");idle(pg,900)
+    bar=lambda:pg.eval_on_selector_all('.pbarx button[data-p]','e=>e.map(x=>x.dataset.p)')
+    assert bar()==['P01','P02','P03'] and '외 4개' in pg.inner_text('.pbarx .more'),bar()
+    # 목록에서 끌어 순서를 바꾸면 위 줄도 따라 바뀐다
+    drag(pg,'.prow[data-p="집 정리"]','.prow[data-p="P01"]',{'x':60,'y':4})
+    assert pg.eval_on_selector_all('.prow[data-p]','e=>e.map(x=>x.dataset.p)')[:3]==['집 정리','P01','P02'] and bar()==['집 정리','P01','P02'],bar()
+    assert 'order: 0' in fget(pg,'10_Projects/집 정리.md') and 'order: 1' in fget(pg,'10_Projects/P01.md')
+    drag(pg,'.prow[data-p="P05"]','.prow[data-p="P01"]',{'x':60,'y':4});assert bar()==['집 정리','P05','P01'],bar()
+    pg.click('.prow[data-p="블로그 개편"]');idle(pg);assert pg.get_attribute('.pbarx button[data-p="블로그 개편"]','aria-pressed')=='true' and len(bar())==4
+    pg.click('.pbarx .more');idle(pg);assert pg.locator('.prow[data-p]').count()==7
     if SHOTS:pg.screenshot(path=os.path.join(SHOTS,'02-project-many.png'))
     pg.evaluate("(async()=>{for(const n of notes.filter(x=>/^P\\d\\d$/.test(x.title))){await api.del(n.path,n.sha,'t');}notes=notes.filter(x=>!/^P\\d\\d$/.test(x.title));render();})()");idle(pg,700);assert pg.locator('.prow[data-p]').count()==2
     # 보드: 줄(할 일 · 진행 중 · 완료)에 그 프로젝트의 할 일·노트가 카드로. 완료된 할 일은 완료 줄

@@ -188,6 +188,7 @@ td input.inl{width:118px}
 .plist2{max-width:860px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .prow{display:flex;gap:10px;align-items:center;width:100%;text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);background:var(--bg)}
 .prow:last-child{border-bottom:0}.prow:hover{background:var(--bg2)}.prow b{font-size:14.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow .grip{color:var(--fg3);font-size:12px;letter-spacing:-2px;cursor:grab;flex:0 0 auto}.prow.dragging{opacity:.4}.prow.over-top{box-shadow:inset 0 2px 0 var(--accent)}.prow.over-bottom{box-shadow:inset 0 -2px 0 var(--accent)}
 .prow .sp{flex:1}.prow .pm{font-size:12px;color:var(--fg3);white-space:nowrap}.prow .pm.late{color:var(--danger)}
 .prow .pp2{display:flex;gap:6px;align-items:center;width:110px;flex:0 0 auto;justify-content:flex-end}
 .pbar{display:block;flex:1;height:4px;border-radius:2px;background:var(--line);overflow:hidden}.pbar u{display:block;height:100%;background:var(--accent)}
@@ -430,7 +431,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   .tabs button{padding:4px 8px}
   td.t{min-width:140px}
   .col{flex-basis:220px}
-  .prow{flex-wrap:wrap;row-gap:4px}.prow b{flex:1 1 100%}.prow .sp{display:none}.prow .pp2{margin-left:auto}
+  .prow{flex-wrap:wrap;row-gap:4px}.prow b{flex:1 1 70%}.prow .sp{display:none}.prow .pp2{margin-left:auto}
   .tlist{flex-basis:82vw}.phead .ptitle{font-size:17px}.tboard{min-height:60vh}
   .hide-m{display:none}
   .sugl{display:none}
@@ -1085,9 +1086,16 @@ function renderTable(v,m,mode=''){
    "완료" 줄이 있으면 완료된 할 일은 그 줄에 놓이고, 그 줄로 끌어 넣으면 완료가 된다 */
 const DEFAULT_LISTS=['할 일','진행 중','완료'],DONE_LIST='완료';
 let projSel=localStorage.getItem('brain.proj')||'',projLabel='',projArchOpen=false,projFocus='',cardDrag=null;
-let projRecent=[];try{projRecent=JSON.parse(localStorage.getItem('brain.projRecent')||'[]');}catch{}
-function selectProject(t){projSel=t;localStorage.setItem('brain.proj',t);if(t){projRecent=[t,...projRecent.filter(x=>x!==t)].slice(0,30);localStorage.setItem('brain.projRecent',JSON.stringify(projRecent));}render();}
-const PROJ_BAR_MAX=8;
+function selectProject(t){projSel=t;localStorage.setItem('brain.proj',t);render();}
+const PROJ_BAR_MAX=3;   // 폰 너비에 맞춰 위 줄에는 3개까지. 어떤 3개인지는 전체 목록의 순서(끌어서 바꿈)가 정한다
+/* 프로젝트 순서: 프로젝트 노트의 order (없으면 이름순으로 뒤에) */
+const sortProj=a=>[...a].sort((x,y)=>{const ox=ordOf(x),oy=ordOf(y);if(ox!==null&&oy!==null&&ox!==oy)return ox-oy;if(ox!==null&&oy===null)return -1;if(oy!==null&&ox===null)return 1;return x.title.localeCompare(y.title);});
+let projDrag=null;
+async function moveProject(n,group,before){
+  const arr=group.filter(x=>x!==n);let i=before?arr.indexOf(before):arr.length;if(i<0)i=arr.length;arr.splice(i,0,n);
+  for(let k=0;k<arr.length;k++)if(ordOf(arr[k])!==k)await saveNote(arr[k],{order:k},undefined,undefined,true);
+  render();
+}
 const cleanList=x=>String(x).replace(/[\[\],"'#:]/g,' ').replace(/\s+/g,' ').trim().slice(0,30);
 function listsOf(p){let v=p.fm.lists;v=Array.isArray(v)?v:(v?[v]:[]);v=[...new Set(v.map(x=>String(x).trim()).filter(Boolean))];return v.length?v:[...DEFAULT_LISTS];}
 const cardsOf=p=>notes.filter(n=>!isArchived(n)&&typeOf(n)!=='project'&&projectOf(n)===p.title);
@@ -1136,9 +1144,7 @@ async function newProject(){
 function projBar(all,cur){
   const bar=el('div',{class:'pbarx',role:'tablist','aria-label':'프로젝트'});
   bar.append(el('button',{id:'projBack',role:'tab','aria-pressed':String(!cur),title:'프로젝트 전체 보기 (끝낸 프로젝트 포함)',onclick:()=>selectProject('')},'전체'));
-  const rank=n=>{const k=projRecent.indexOf(n.title);return k<0?999:k;};
-  const active=all.filter(n=>n.fm.status==='active'||!statusOpt(n.fm.status)).sort((a,b)=>a.title.localeCompare(b.title));
-  let list=[...active].sort((a,b)=>rank(a)-rank(b)).slice(0,PROJ_BAR_MAX).sort((a,b)=>a.title.localeCompare(b.title));   // 자리는 이름순으로 고정
+  let list=sortProj(all.filter(n=>n.fm.status==='active'||!statusOpt(n.fm.status))).slice(0,PROJ_BAR_MAX);   // 진행 중인 것 중 목록 순서로 앞의 3개
   if(cur&&!list.includes(cur))list=[...list,cur];   // 보류·완료거나 밀려난 프로젝트도 열려 있는 동안은 표시
   for(const n of list){const tl=todosOf(n.title),d=tl.filter(t=>t.fm.status==='done').length;
     bar.append(el('button',{role:'tab','data-p':n.title,'aria-pressed':String(n===cur),onclick:()=>selectProject(n.title)},n.title,tl.length?el('small',{},`${d}/${tl.length}`):''));}
@@ -1156,19 +1162,26 @@ function renderProjects(m){
   /* ---- 전체: 프로젝트 타일 ---- */
   m.append(projBar(all,null));
   m.append(labelBar(all,()=>projLabel,v=>{projLabel=v;}));
-  const shown=all.filter(n=>(!projLabel||(projLabel==='__none'?!labelsOf(n).length:labelsOf(n).includes(projLabel)))&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>a.title.localeCompare(b.title));
+  const shown=all.filter(n=>(!projLabel||(projLabel==='__none'?!labelsOf(n).length:labelsOf(n).includes(projLabel)))&&(!q||n.title.toLowerCase().includes(q)));
   if(!all.length)m.append(el('div',{class:'status'},'프로젝트가 없습니다. ',el('button',{class:'addbtn',style:'margin-left:8px',onclick:newProject},'+ 프로젝트'),el('div',{class:'evnote',style:'margin-top:10px'},'할 일 카드의 "프로젝트로 키우기"로도 만들 수 있습니다.')));
   else if(!shown.length)m.append(el('div',{class:'status'},'해당하는 프로젝트가 없습니다.'));
-  const groups=[...config.statuses.map(o=>[o.name,shown.filter(n=>n.fm.status===o.id)]),['상태 없음',shown.filter(n=>!statusOpt(n.fm.status))]];
+  const groups=[...config.statuses.map(o=>[o.name,sortProj(shown.filter(n=>n.fm.status===o.id))]),['상태 없음',sortProj(shown.filter(n=>!statusOpt(n.fm.status)))]];
+  const canSort=!q&&!projLabel;   // 거른 상태에서는 순서를 바꾸지 않는다
   for(const[name,list]of groups){if(!list.length)continue;
-    const box=el('div',{class:'plist2'});
+    const box=el('div',{class:'plist2'});const clear=()=>m.querySelectorAll('.prow.over-top,.prow.over-bottom').forEach(x=>x.classList.remove('over-top','over-bottom'));
     for(const n of list){const tl=todosOf(n.title),d=tl.filter(t=>t.fm.status==='done').length,cn=cardsOf(n).length;
-      box.append(el('button',{class:'prow','data-p':n.title,onclick:()=>selectProject(n.title)},
-        el('b',{},n.title),labelTag(n),el('span',{class:'sp'}),
+      const row=el('button',{class:'prow','data-p':n.title,draggable:canSort?'true':null,onclick:()=>selectProject(n.title),
+        ondragstart:e=>{e.dataTransfer.setData('text/plain',n.title);e.dataTransfer.effectAllowed='move';projDrag={n,list,before:undefined};row.classList.add('dragging');},
+        ondragend:()=>{row.classList.remove('dragging');projDrag=null;clear();},
+        ondragover:e=>{if(!projDrag||projDrag.list!==list)return;e.preventDefault();const r=row.getBoundingClientRect();const top=e.clientY<r.top+r.height/2;clear();row.classList.add(top?'over-top':'over-bottom');projDrag.before=top?n:(list[list.indexOf(n)+1]||null);},
+        ondrop:async e=>{e.preventDefault();const d=projDrag;projDrag=null;clear();if(!d||d.list!==list||d.before===undefined||d.before===d.n)return;await moveProject(d.n,list,d.before);}},
+        canSort?el('span',{class:'grip','aria-hidden':'true',title:'끌어서 순서 바꾸기'},'⋮⋮'):'',el('b',{},n.title),labelTag(n),el('span',{class:'sp'}),
         n.fm.due?el('span',{class:'pm'+(isLate(n)?' late':'')},'마감 '+fmtDue(n.fm.due)):'',
         el('span',{class:'pm'},cn?`카드 ${cn}`:'카드 없음'),
-        el('span',{class:'pp2'},tl.length?el('i',{class:'pbar'},el('u',{style:`width:${Math.round(d/tl.length*100)}%`})):'',el('span',{class:'pm'},tl.length?`${d}/${tl.length}`:''))));}
+        el('span',{class:'pp2'},tl.length?el('i',{class:'pbar'},el('u',{style:`width:${Math.round(d/tl.length*100)}%`})):'',el('span',{class:'pm'},tl.length?`${d}/${tl.length}`:'')));
+      box.append(row);}
     m.append(el('h4',{class:'pgh'},name,el('small',{},String(list.length))),box);}
+  if(all.length>1&&canSort)m.append(el('p',{class:'evnote',style:'margin:10px 2px 0'},`줄을 끌어서 순서를 바꿉니다. 진행 중인 프로젝트 중 위에서 ${PROJ_BAR_MAX}개가 맨 위 프로젝트 줄에 나옵니다.`));
   if(arch.length)m.append(archSection('parch','끝낸 프로젝트',arch.filter(n=>!q||n.title.toLowerCase().includes(q)),projArchOpen,()=>{projArchOpen=!projArchOpen;render();}));
 }
 function renderProjectBoard(m,p,q){
