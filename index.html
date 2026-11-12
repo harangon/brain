@@ -266,6 +266,10 @@ td input.inl{width:118px}
 .card-v .desc.empty{color:var(--fg3)}
 .card-v .desc h1,.card-v .desc h2,.card-v .desc h3{font-size:1.05em;margin:.6em 0 .2em}
 .card-v .desc img{max-width:100%;border-radius:6px}
+.card-v a.xl,.todo a.xl{color:var(--accent);text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere}
+.card-v .ci.ref{align-items:flex-start}.card-v .ci.ref .ri{flex:0 0 18px;text-align:center;color:var(--fg3)}.card-v .ci.ref .t{flex:1;min-width:0;overflow-wrap:anywhere}.card-v .ci.ref small{display:block;font-size:12px;color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-v .pinbtn{flex:0 0 auto;color:var(--fg3)}.card-v .pinbtn.on{border-color:var(--accent);color:var(--accent)}
+@media (max-width:640px){.card-v .pinbtn{font-size:0;padding:5px 8px}.card-v .pinbtn::before{content:'📌';font-size:13px}.card-v .pinbtn:not(.on)::before{opacity:.45}}
 .card-v .desc.editing{border-color:var(--accent);background:var(--bg);cursor:text;min-height:140px;outline:none;white-space:pre-wrap;overflow-wrap:anywhere}
 .card-v .desc.editing p{margin:0}.card-v .desc.editing>:first-child{margin-top:0}.card-v .desc.editing ul{margin:.2em 0;padding-left:1.3em}.card-v .desc.editing pre{background:var(--bg2);border-radius:6px;padding:8px;font-size:12.5px;overflow:auto}
 .card-v .desc.editing a.wl,.card-v .desc.editing .rawmd{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:0 5px;text-decoration:none;color:var(--accent);white-space:nowrap}
@@ -657,7 +661,7 @@ function progressOf(n){let t=0,d=0;for(const ln of n.body.split('\n')){const x=p
 function doneBox(n){if(!isTask(n))return'';const done=n.fm.status==='done';
   return el('input',{type:'checkbox',class:'nd',checked:done?'':null,'aria-label':done?'완료 해제':'완료',title:'완료 = status: done',onclick:e=>e.stopPropagation(),onchange:async e=>{await saveNote(n,{status:e.target.checked?'done':''},undefined,undefined,true);}});}
 function progEl(n){const{t,d}=progressOf(n);if(!t)return'';return el('span',{class:'prog'+(d===t?' full':''),title:`할 일 ${d}/${t}`},el('i',{},el('b',{style:`width:${Math.round(d/t*100)}%`})),`${d}/${t}`);}
-const RESERVED=new Set(['todo','lists','list','project','protected','archived','reviewed','suggest-project','suggest-label','type','status','label','due','created','updated','related','permanent-candidate','order','cover','source']);
+const RESERVED=new Set(['pin','todo','lists','list','project','protected','archived','reviewed','suggest-project','suggest-label','type','status','label','due','created','updated','related','permanent-candidate','order','cover','source']);
 
 /* ===================== GitHub API ===================== */
 const api={
@@ -838,6 +842,8 @@ function mdToHtml(md){
   h=h.replace(/^- (.*)$/gm,'<li>$1</li>').replace(/(<li>[\s\S]*?<\/li>\n?)+/g,m=>`<ul>${m.replace(/\n/g,'')}</ul>\n`);
   h=h.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g,(_,a,u)=>`<img alt="${a}" data-src="${u}">`).replace(/!\[\[([^\]|]+\.(?:png|jpe?g|gif|webp|svg))(?:\|[^\]]*)?\]\]/gi,(_,f)=>`<img alt="${f}" data-src="_attachments/${f}">`);
   h=h.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,(_,t,a)=>`<a class="wl" href="#" data-wl="${t}">${a||t}</a>`);
+  h=h.replace(/(^|[^!])\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g,(_,pre,t,u)=>`${pre}<a class="xl" href="${u}" target="_blank" rel="noopener">${t}</a>`);
+  h=h.replace(/(?<![="'>\/\w])https?:\/\/[^\s<"']+/g,u0=>{let u=u0;const cut=u.match(/(?:[.,;:!?)\]]|&[a-z]+;)+$/);const tail=cut?cut[0]:'';if(tail)u=u.slice(0,-tail.length);return `<a class="xl" href="${u}" target="_blank" rel="noopener">${urlLabel(u)}</a>${tail}`;});
   h=h.replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
   h=h.replace(/&lt;!--[\s\S]*?--&gt;/g,'');
   h=h.replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>');
@@ -942,8 +948,15 @@ function visible(){
     &&(!q||(n.title+n.body+JSON.stringify(n.fm)).toLowerCase().includes(q)));
   const[k,d]=state.sort.split(':');const dir=+d||1;
   v.sort((a,b)=>{const x=val(a,k),y=val(b,k);if(x===''&&y!=='')return 1;if(y===''&&x!=='')return -1;return (x<y?-1:x>y?1:0)*dir;});
+  v.sort((a,b)=>isPinned(b)-isPinned(a));   // 고정한 노트가 맨 위 (나머지 순서는 그대로)
   return v;
 }
+const isPinned=n=>n.fm.pin===true||n.fm.pin==='true';
+/* 글 속의 주소(http…)를 누를 수 있는 링크로 만들어 parent 에 붙인다. 파일에는 주소 글자 그대로 남는다 */
+const URL_RE=/https?:\/\/[^\s<>"']+/g;const urlLabel=u=>u.replace(/^https?:\/\/(www\.)?/,'').replace(/\/$/,'');
+function linkify(text,parent){let last=0;for(const m of String(text).matchAll(URL_RE)){let u=m[0];const cut=u.match(/[.,;:!?)\]]+$/);if(cut)u=u.slice(0,-cut[0].length);
+    if(m.index>last)parent.append(text.slice(last,m.index));parent.append(el('a',{class:'xl',href:u,target:'_blank',rel:'noopener',title:u,onclick:e=>e.stopPropagation()},urlLabel(u)));last=m.index+u.length;}
+  if(last<text.length)parent.append(text.slice(last));return parent;}
 function val(n,k){if(k==='title')return n.title;if(k==='project')return projectOf(n);if(k==='type')return TYPE_NAME[typeOf(n)];if(k==='updated')return n.fm.updated||n.fm.created||'';const v=n.fm[k]??'';return typeof v==='string'&&/^-?\d+(\.\d+)?$/.test(v)?Number(v):v;}
 
 /* ===================== 렌더 ===================== */
@@ -1102,7 +1115,7 @@ function renderTable(v,m,mode=''){
     ...cols.map(([k,t])=>el('th',{class:['updated','type','status','due'].includes(k)||!['title','project','label'].includes(k)?'hide-m':''},mode==='recent'?t:el('button',{onclick:()=>{const d=sk===k?-sd:(k==='updated'?-1:1);state.sort=`${k}:${d}`;render();}},t,sk===k?(+sd>0?' ↑':' ↓'):''))));
   const rows=v.map(n=>{const ty=typeOf(n),task=isTask(n);return el('tr',{'data-path':n.path},
     el('td',{class:'ck'},task?doneBox(n):mode==='recent'?'':el('input',{type:'checkbox','aria-label':'선택',checked:selected.has(n.path)?'':null,onchange:e=>{e.target.checked?selected.add(n.path):selected.delete(n.path);render();}})),
-    el('td',{class:'t'+(n.fm.status==='done'&&task?' isdone':'')},el('button',{onclick:()=>openNote(n)},n.title),progEl(n),slim?'':mmeta(n,showType)),
+    el('td',{class:'t'+(n.fm.status==='done'&&task?' isdone':'')},el('button',{onclick:()=>openNote(n)},isPinned(n)?el('span',{class:'pin',title:'고정됨'},'📌 '):'',n.title),progEl(n),slim?'':mmeta(n,showType)),
     ...(showType?[el('td',{class:'hide-m'},TYPE_NAME[ty])]:[]),
     el('td',{},inlineProject(n)),
     ...(slim?[el('td',{},inlineLabelsSug(n))]:[
@@ -1806,9 +1819,9 @@ function todoLine(indent,text,{done=false,due=null,doneDate=null}={}){
 let descEditing=false;const actCache={};
 /* 본문을 설명 / 체크리스트 / 첨부 / 연결로 나눈다. 화면에서는 파일 형식(마크다운)을 보이지 않는다.
    kind[i]: 줄마다 'desc'(설명) · 'cl'(체크리스트 제목·항목) · 'img'(이미지만 있는 줄) · 'link'("## 연결" 묶음) */
-const IMG_LINE=/^\s*(?:!\[[^\]]*\]\([^)\s]+\)|!\[\[[^\]]+\]\])\s*$/;const LINK_LINE=/^\s*[-*]\s*\[\[([^\]|]+)(?:\|[^\]]*)?\]\]\s*$/;
+const REF_LINE=/^\s*[-*]\s+(.+)$/;const IMG_LINE=/^\s*(?:!\[[^\]]*\]\([^)\s]+\)|!\[\[[^\]]+\]\])\s*$/;const LINK_LINE=/^\s*[-*]\s*\[\[([^\]|]+)(?:\|[^\]]*)?\]\]\s*$/;
 function splitBody(body){
-  const lines=stripH1(body).split('\n');const kind=lines.map(()=>'desc');const groups=[];const linkLines=[];
+  const lines=stripH1(body).split('\n');const kind=lines.map(()=>'desc');const groups=[];const linkLines=[];const refLines=[];
   const heads=[];let fence=false;lines.forEach((ln,i)=>{if(/^```/.test(ln)){fence=!fence;return;}if(!fence&&/^#{2,6}\s+\S/.test(ln))heads.push(i);});
   const secs=[{head:-1,from:0,to:heads.length?heads[0]:lines.length},...heads.map((h,k)=>({head:h,from:h+1,to:heads[k+1]??lines.length}))];
   for(const sc of secs){
@@ -1816,6 +1829,7 @@ function splitBody(body){
     const content=[];for(let i=sc.from;i<sc.to;i++)if(lines[i].trim())content.push(i);
     const items=content.filter(i=>parseTodo(lines[i]));
     if(sc.head>=0&&heading==='연결'&&content.length&&content.every(i=>LINK_LINE.test(lines[i]))){for(let i=sc.head;i<sc.to;i++)kind[i]='link';content.forEach(i=>linkLines.push({line:i,target:lines[i].match(LINK_LINE)[1].trim()}));continue;}
+    if(sc.head>=0&&heading==='참고'&&(!content.length||content.every(i=>REF_LINE.test(lines[i])&&!parseTodo(lines[i])))){for(let i=sc.head;i<sc.to;i++)kind[i]='ref';content.forEach(i=>refLines.push({line:i,text:lines[i].match(REF_LINE)[1].trim()}));continue;}
     if(items.length){
       // 제목 아래에 항목이 하나라도 있으면 그 제목은 체크리스트 이름이다
       groups.push({heading,headLine:sc.head,items:items.map(i=>({...parseTodo(lines[i]),line:i}))});items.forEach(i=>kind[i]='cl');
@@ -1824,15 +1838,15 @@ function splitBody(body){
   }
   lines.forEach((ln,i)=>{if(kind[i]==='desc'&&IMG_LINE.test(ln))kind[i]='img';});
   const desc=lines.filter((_,i)=>kind[i]==='desc').join('\n').replace(/\n{3,}/g,'\n\n').trim();
-  return{groups,desc,lines,kind,linkLines};
+  return{groups,desc,lines,kind,linkLines,refLines};
 }
-/* 설명만 바꿔 본문을 다시 만든다: 설명 → 체크리스트 → 첨부 → 연결 순서. 설명이 아닌 줄은 그대로 둔다 */
+/* 설명만 바꿔 본문을 다시 만든다: 설명 → 체크리스트 → 참고 → 첨부 → 연결 순서. 설명이 아닌 줄은 그대로 둔다 */
 function composeBody(body,newDesc){
   const{lines,kind}=splitBody(body);const out=[];let needHead=true;
   const push=(ln,k)=>{if(!ln.trim())return;const isHead=/^#{2,6}\s+\S/.test(ln);
     if(k==='cl'&&!isHead&&needHead){out.push('','## 체크리스트');}   // 제목 없는 항목이 설명의 마지막 소제목 아래로 들어가지 않게
     if(isHead)out.push('');needHead=false;out.push(ln);};
-  for(const k of ['cl','img','link']){let first=true;lines.forEach((ln,i)=>{if(kind[i]!==k)return;if(first&&k!=='cl'&&ln.trim()&&!/^#{2,6}\s/.test(ln))out.push('');first=false;if(k!=='cl')needHead=false;push(ln,k);if(k==='cl'&&/^#{2,6}\s+\S/.test(ln))needHead=false;});if(k==='cl')needHead=false;}
+  for(const k of ['cl','ref','img','link']){let first=true;lines.forEach((ln,i)=>{if(kind[i]!==k)return;if(first&&k!=='cl'&&ln.trim()&&!/^#{2,6}\s/.test(ln))out.push('');first=false;if(k!=='cl')needHead=false;push(ln,k);if(k==='cl'&&/^#{2,6}\s+\S/.test(ln))needHead=false;});if(k==='cl')needHead=false;}
   return (String(newDesc||'').replace(/\s+$/,'')+'\n'+out.join('\n')).replace(/^\n+/,'').replace(/\n{3,}/g,'\n\n').replace(/\s*$/,'\n');
 }
 /* ---- 설명 편집기: 마크다운을 보이지 않고 서식 그대로 고친다 (줄 하나 = 블록 하나) ---- */
@@ -1901,6 +1915,7 @@ function renderCard(n){
   const ti=el('input',{class:'ctitle',value:n.title,'aria-label':'제목',enterkeyhint:'done',onkeydown:e=>{if(e.key==='Enter'){e.preventDefault();ti.blur();}},onblur:async()=>{const t=ti.value.trim();if(t&&t!==n.title){if(ty==='project'&&projectNote(t)){toast('같은 이름의 프로젝트가 있습니다');ti.value=n.title;return;}await saveNote(n,{},t,undefined,true);}else ti.value=n.title;}});
   const tf=el('form',{style:'display:contents',onsubmit:e=>{e.preventDefault();ti.blur();}},ti);   // 폰 키보드의 완료 키 → 저장
   if(isTask(n))box.append(el('div',{class:'ctrow'},el('input',{type:'checkbox',class:'cdone',checked:n.fm.status==='done'?'':null,'aria-label':'완료',title:'완료',onchange:e=>saveNote(n,{status:e.target.checked?'done':''},undefined,undefined,true)}),tf));
+  else if(ty==='note'&&!arch){const on=isPinned(n);box.append(el('div',{class:'ctrow'},tf,el('button',{class:'btn sm pinbtn'+(on?' on':''),'aria-pressed':String(on),title:on?'고정을 풉니다':'노트 목록 맨 위에 고정합니다',onclick:()=>saveNote(n,{pin:on?'':true},undefined,undefined,true)},on?'📌 고정됨':'📌 고정')));}
   else box.append(tf);
   // 칩 줄: 종류에 따라 — 프로젝트는 상태·마감·라벨, 할 일은 프로젝트·마감·라벨, 노트는 프로젝트·라벨
   const chips=el('div',{class:'chiprow'});
@@ -1978,7 +1993,7 @@ function renderCard(n){
     for(const it of g.items){
       const ci=el('div',{class:'ci'+(it.done?' done':'')});
       ci.append(el('input',{type:'checkbox',checked:it.done?'':null,'aria-label':'완료',onchange:async e=>{const lines=stripH1(n.body).split('\n');const m=lines[it.line].match(TODO_RE);if(!m)return;lines[it.line]=todoLine(m[1],m[3],{done:e.target.checked,due:it.due});await saveNote(n,{},undefined,lines.join('\n'),true);}}),
-        el('span',{class:'t'},it.text.replace(/📅\s*\d{4}-\d{2}-\d{2}/,'').trim()),it.due?el('span',{class:'due'},fmtDue(it.due)):'',
+        linkify(it.text.replace(/📅\s*\d{4}-\d{2}-\d{2}/,'').trim(),el('span',{class:'t'})),it.due?el('span',{class:'due'},fmtDue(it.due)):'',
         el('button',{class:'icon x','aria-label':'항목 삭제',onclick:async()=>{const lines=stripH1(n.body).split('\n');lines.splice(it.line,1);await saveNote(n,{},undefined,lines.join('\n'),true);}},'✕'));
       cl.append(ci);}
     const add=el('input',{placeholder:'+ 항목 — "금요일 보고서"처럼 날짜도 됩니다','aria-label':'항목 추가',enterkeyhint:'done'});const addGo=async()=>{const raw=add.value.trim();if(!raw)return;const w=parseWhen(raw);const text=w?w.rest:raw;if(!text)return;
@@ -1987,6 +2002,30 @@ function renderCard(n){
   }
   if(!groups.length)cls.append(el('div',{class:'evnote'},'없습니다. "+ 체크리스트"로 만듭니다.'));
   box.append(cls);
+  // 참고 — 링크나 메모를 개수 제한 없이. 본문 "## 참고" 아래 한 줄씩 (주소만 / [제목](주소) / 글)
+  if(ty!=='project'||splitBody(n.body).refLines.length||n.fm.source){
+    const{refLines}=splitBody(n.body);const src=typeof n.fm.source==='string'&&/^https?:\/\//.test(n.fm.source.trim())?n.fm.source.trim():'';
+    const rs=el('section',{'data-sec':'refs'});rs.append(el('h3',{},'참고',el('span',{class:'evnote'},refLines.length+(src?1:0)?String(refLines.length+(src?1:0)):''),el('span',{class:'sp'})));
+    const rb=el('div',{class:'cl'});
+    const rowOf=(icon,main,onDel,delTitle)=>el('div',{class:'ci ref'},el('span',{class:'ri'},icon),main,el('button',{class:'icon x','aria-label':'빼기',title:delTitle||'뺍니다',onclick:onDel},'✕'));
+    if(src)rb.append(rowOf('🔗',el('span',{class:'t'},el('a',{class:'xl',href:src,target:'_blank',rel:'noopener'},'원문'),el('small',{},urlLabel(src))),()=>saveNote(n,{source:''},undefined,undefined,true),'원문 주소를 뺍니다'));
+    for(const r of refLines){
+      const m=r.text.match(/^\[([^\]]+)\]\((https?:[^)\s]+)\)$/);const only=r.text.match(/^https?:\/\/\S+$/);const main=el('span',{class:'t'});
+      if(m)main.append(el('a',{class:'xl',href:m[2],target:'_blank',rel:'noopener'},m[1]),el('small',{},urlLabel(m[2])));else linkify(r.text,main);
+      rb.append(rowOf(m||only?'🔗':'·',main,async()=>{const{lines,refLines:cur}=splitBody(n.body);const hit=cur.find(x=>x.line===r.line&&x.text===r.text);if(!hit)return;lines.splice(hit.line,1);
+        if(cur.length===1){let hi=hit.line-1;while(hi>=0&&!lines[hi].trim())hi--;if(hi>=0&&/^#{2,6}\s+참고\s*$/.test(lines[hi]))lines.splice(hi,1);}
+        await saveNote(n,{},undefined,lines.join('\n').replace(/\n{3,}/g,'\n\n'),true);}));}
+    const add=el('input',{placeholder:'+ 링크나 메모 — 주소를 붙여넣으면 링크가 됩니다','aria-label':'참고 추가',enterkeyhint:'done'});
+    const addGo=async()=>{const raw=add.value.replace(/\s+/g,' ').trim();if(!raw)return;
+      // "제목 주소" 또는 "주소 제목" 한 쌍이면 제목이 링크가 된다. 그 밖에는 적은 그대로
+      const urls=raw.match(URL_RE)||[];let row=raw;if(urls.length===1&&raw!==urls[0]){const t=raw.replace(urls[0],'').replace(/^[\s\-–—:·|]+|[\s\-–—:·|]+$/g,'');if(t&&(raw.startsWith(urls[0])||raw.endsWith(urls[0])))row=`[${t.replace(/[\[\]]/g,'')}](${urls[0]})`;}
+      const{lines,refLines:cur,kind}=splitBody(n.body);
+      if(cur.length)lines.splice(cur[cur.length-1].line+1,0,'- '+row);
+      else{const hi=lines.findIndex((l,i)=>kind[i]==='ref'&&/^#{2,6}\s+참고\s*$/.test(l));if(hi>=0)lines.splice(hi+1,0,'- '+row);
+        else{let at=lines.findIndex((l,i)=>kind[i]==='img'||kind[i]==='link');if(at<0)at=lines.length;while(at>0&&!lines[at-1].trim())at--;lines.splice(at,0,...(at>0?['']:[]),'## 참고','- '+row,'');}}
+      add.value='';await saveNote(n,{},undefined,lines.join('\n').replace(/\n{3,}/g,'\n\n'),true);setTimeout(()=>$('#card [data-sec=refs] .add input')?.focus(),0);};
+    rb.append(el('form',{class:'add',onsubmit:e=>{e.preventDefault();addGo();}},add,el('button',{type:'submit',class:'btn sm'},'추가')));rs.append(rb);box.append(rs);
+  }
   // 첨부
   const imgs=[...stripH1(n.body).matchAll(/!\[[^\]]*\]\(([^)\s]+)\)|!\[\[([^\]|]+\.(?:png|jpe?g|gif|webp|svg))(?:\|[^\]]*)?\]\]/gi)].map(m=>m[1]||('_attachments/'+m[2]));
   const at=el('section',{});at.append(el('h3',{},'첨부',el('span',{class:'sp'}),el('button',{class:'btn sm',onclick:()=>$('#pFile').click()},'+ 이미지')));

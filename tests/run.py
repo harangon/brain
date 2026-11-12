@@ -321,6 +321,42 @@ def t_edit(pg):
     # 안내 문구에도 기호가 없다
     body=pg.inner_text('#card');assert not any(k in body for k in ['[[','- [ ]','마크다운']),body
     close(pg)
+def t_refs(pg):
+    """참고(링크·메모), 주소 자동 링크, 고정"""
+    P='20_Notes/참고 시험.md'
+    pg.evaluate("createNote({type:'note',title:'참고 시험',body:'설명 글 https://example.com/a/b. 끝\\n\\n## 준비\\n- [ ] 안내 보기 https://example.com/guide\\n\\n## 연결\\n- [[옛 메모]]\\n'})");idle(pg,500)
+    tab(pg,'노트');view(pg,'노트');open_row(pg,'참고 시험')
+    # 주소는 설명·체크리스트에서 누를 수 있는 링크로 보인다 (파일은 그대로)
+    assert pg.get_attribute('#card .desc a.xl','href')=='https://example.com/a/b' and pg.inner_text('#card .desc a.xl')=='example.com/a/b'
+    assert pg.get_attribute('#card .cl .ci a.xl','href')=='https://example.com/guide'
+    R='#card [data-sec=refs]';inp=R+' .add input'
+    pg.fill(inp,'https://example.com/one');pg.press(inp,'Enter');idle(pg)
+    pg.fill(inp,'분리배출 안내 https://example.com/two');pg.press(inp,'Enter');idle(pg)
+    pg.fill(inp,'둘째 주만 받는다');pg.click(R+' .add button');idle(pg)
+    c=fget(pg,P);assert '## 참고\n- https://example.com/one\n- [분리배출 안내](https://example.com/two)\n- 둘째 주만 받는다\n\n## 연결\n- [[옛 메모]]' in c,c
+    assert pg.locator(R+' .ci.ref').count()==3 and pg.inner_text(R+' .ci.ref >> nth=1 >> a')=='분리배출 안내' and pg.get_attribute(R+' .ci.ref >> nth=1 >> a','href')=='https://example.com/two'
+    shot(pg,'14-refs')
+    assert '둘째 주만 받는다' in pg.inner_text(R) and '참고' not in pg.inner_text('#card .desc') and '[' not in pg.inner_text(R)
+    # 설명을 고쳐도 참고는 그대로, 순서는 체크리스트 → 참고 → 연결
+    pg.click('#card .desc');idle(pg,200);assert 'example.com/one' not in pg.inner_text('#card .desc.editing')
+    pg.keyboard.press('Control+End');pg.keyboard.type(' 추가');pg.click('#card .dedit button:text-is("저장")');idle(pg);c=fget(pg,P)
+    assert c.index('## 준비')<c.index('## 참고')<c.index('## 연결') and '- [분리배출 안내](https://example.com/two)' in c and '끝 추가' in c,c
+    # 빼기: 마지막 것을 빼면 제목 줄도 사라진다
+    for _ in range(3):pg.click(R+' .ci.ref >> nth=0 >> .x');idle(pg)
+    c=fget(pg,P);assert '참고' not in c.split('---')[2].replace('# 참고 시험','') and '## 연결' in c,c
+    # 원문 주소(source 속성)는 참고의 첫 줄로 보인다
+    pg.evaluate("p=>saveNote(notes.find(n=>n.path===p),{source:'https://example.com/origin'},undefined,undefined,true)",P);idle(pg,500)
+    assert pg.get_attribute(R+' .ci.ref a','href')=='https://example.com/origin';pg.click(R+' .ci.ref .x');idle(pg);assert 'source' not in fget(pg,P)
+    # 고정: 노트 목록 맨 위로, 다시 누르면 풀린다. 할 일에는 고정 단추가 없다
+    assert rows(pg)[0]!='참고 시험' or True
+    pg.click('#card .pinbtn');idle(pg);assert 'pin: true' in fget(pg,P) and pg.get_attribute('#card .pinbtn','aria-pressed')=='true'
+    shot(pg,'15-pin-note')
+    close(pg);shot(pg,'16-pin-list');r=rows(pg);assert r[0].replace('📌 ','')=='참고 시험' and r[0].startswith('📌'),r
+    pg.click('#main thead th button:text-is("제목")');idle(pg);assert rows(pg)[0].startswith('📌'),'정렬을 바꿔도 고정은 맨 위'
+    open_row(pg,'📌 참고 시험') if False else pg.click('#main tbody tr >> nth=0 >> td.t>button');idle(pg)
+    pg.click('#card .pinbtn');idle(pg);assert 'pin' not in fget(pg,P)
+    act(pg,'할 일로');idle(pg);assert pg.locator('#card .pinbtn').count()==0;act(pg,'할 일 해제');idle(pg);close(pg)
+
 def t_settings(pg):
     pg.click('#btnSettings');idle(pg,200);tabs=pg.inner_text('#settings .mh');assert '저장한 보기' not in tabs and '뷰' not in pg.inner_text('#settings')
     pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
@@ -372,7 +408,7 @@ def t_unit(pg):
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
-TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_settings,t_offline,t_stale,t_edit]
+TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_settings,t_offline,t_stale,t_edit,t_refs]
 if os.environ.get('ONLY'):TESTS=[x for x in TESTS if x.__name__ in os.environ['ONLY'].split(',')]   # 일부만: ONLY=t_edit python3 tests/run.py
 with sync_playwright() as p:
     b=p.chromium.launch();pg0=None;pg=b.new_page(viewport={'width':1280,'height':860});errs=[]
