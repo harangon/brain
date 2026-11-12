@@ -458,7 +458,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   <div class="bar">
     <span class="title">brain</span>
     <div class="tabs" role="tablist">
-      <button role="tab" data-view="notes" aria-selected="true">카드</button>
+      <button role="tab" data-view="notes" aria-selected="true">노트</button>
       <button role="tab" data-view="projects">프로젝트</button>
       <button role="tab" data-view="todo">할 일</button>
       <button role="tab" data-view="calendar">일정</button>
@@ -568,10 +568,10 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
 /* ===================== 상수·상태 ===================== */
 const LS='brain.cfg', CONFIG_PATH='_scripts/brain.config.json';
 /* 속성이 기준, 폴더는 자동: 종류(type)와 보관(archived)이 폴더를 정한다 */
-const FOLDER_OF={project:'10_Projects',card:'20_Cards'},ARCHIVE_FOLDER='90_Archive',TODO_FOLDER='11_Todos';
-const LEGACY_FOLDERS=['00_Inbox','01_Daily','11_Todos','20_Notes','20_Areas','30_Resources','40_Notes','50_MOC'];   // 옛 구조. 남아 있으면 읽어서 20_Cards 로 옮긴다
-const FOLDERS=['10_Projects','20_Cards',...LEGACY_FOLDERS,ARCHIVE_FOLDER];
-const TYPE_NAME={card:'카드',project:'프로젝트'};
+const FOLDER_OF={project:'10_Projects',note:'20_Notes'},ARCHIVE_FOLDER='90_Archive',TODO_FOLDER='11_Todos';
+const LEGACY_FOLDERS=['00_Inbox','01_Daily','11_Todos','20_Cards','20_Areas','30_Resources','40_Notes','50_MOC'];   // 옛 구조. 남아 있으면 읽어서 20_Notes 로 옮긴다
+const FOLDERS=['10_Projects','20_Notes',...LEGACY_FOLDERS,ARCHIVE_FOLDER];
+const TYPE_NAME={note:'노트',project:'프로젝트'};
 const COLORS=['gray','blue','green','yellow','red','purple','orange'];
 const DEFAULT_CONFIG={
   statuses:[{id:'active',name:'진행',color:'blue'},{id:'paused',name:'보류',color:'yellow'},{id:'done',name:'완료',color:'green'}],
@@ -583,7 +583,7 @@ let cfg=JSON.parse(localStorage.getItem(LS)||'null')||{repo:'harangon/drbrain',b
 cfg.gcal=cfg.gcal||{url:'',key:'',cals:[],names:{}};
 let config=structuredClone(DEFAULT_CONFIG), configSha=null;
 let notes=[],loadError='';
-let state={view:'table',type:'card',project:'',status:'',label:'',group:'status',sort:'updated:-1',q:'',saved:'b:all',inbox:false,arch:false};
+let state={view:'table',type:'note',project:'',status:'',label:'',group:'status',sort:'updated:-1',q:'',saved:'b:all',inbox:false,arch:false};
 try{const st=JSON.parse(localStorage.getItem('brain.state')||'{}');if(st&&'type'in st)Object.assign(state,st);else if(st&&['todo','calendar','docs','projects'].includes(st.view))state.view=st.view;}catch{}
 let current=null;
 const $=s=>document.querySelector(s);
@@ -621,10 +621,10 @@ const statusOpt=id=>optOf(config.statuses,id);const labelOpt=id=>optOf(config.la
 const rawLabels=n=>{const v=n.fm.label;return Array.isArray(v)?v.filter(Boolean):(v?[String(v)]:[]);};
 const labelsOf=n=>rawLabels(n).filter(l=>l!=='todo'||labelOpt('todo'));   // 옛 "할 일" 라벨은 종류로 대체됨
 /* ===================== 모델: 종류 · 프로젝트 · 보관 ===================== */
-/* 종류는 둘: 카드 · 프로젝트. 할 일은 종류가 아니라 카드의 상태 — 날짜가 있거나(due) 할 일로 표시했거나(todo: true) 완료한(status: done) 카드 */
-function typeOf(n){const t=String(n.fm.type||'').toLowerCase();if(t==='project')return t;if(t)return'card';return n.folder===FOLDER_OF.project?'project':'card';}   // 옛 종류(note·todo·inbox·daily…)는 모두 카드
+/* 종류는 둘: 노트 · 프로젝트. 할 일은 종류가 아니라 노트의 상태 — 날짜가 있거나(due) 할 일로 표시했거나(todo: true) 완료한(status: done) 카드 */
+function typeOf(n){const t=String(n.fm.type||'').toLowerCase();if(t==='project')return t;if(t)return'note';return n.folder===FOLDER_OF.project?'project':'note';}   // 옛 종류(card·todo·inbox·daily…)는 모두 카드
 const isLegacyTodo=n=>String(n.fm.type||'').toLowerCase()==='todo'||(rawLabels(n).includes('todo')&&!labelOpt('todo'))||(!n.fm.type&&n.folder===TODO_FOLDER);
-const isTask=n=>typeOf(n)==='card'&&(!!n.fm.due||n.fm.todo===true||n.fm.todo==='true'||n.fm.status==='done'||isLegacyTodo(n));
+const isTask=n=>typeOf(n)==='note'&&(!!n.fm.due||n.fm.todo===true||n.fm.todo==='true'||n.fm.status==='done'||isLegacyTodo(n));
 const isArchived=n=>n.fm.archived===true||n.fm.archived==='true'||n.fm.status==='archived'||n.folder===ARCHIVE_FOLDER;
 const targetFolder=n=>isArchived(n)?ARCHIVE_FOLDER:FOLDER_OF[typeOf(n)];
 const isTodoNote=n=>isTask(n)&&!isArchived(n);
@@ -634,12 +634,12 @@ const projectList=()=>notes.filter(n=>isProjectNote(n)&&!isArchived(n)&&n.fm.sta
 const pjLink=t=>t?`[[${t}]]`:'';
 const projectOf=n=>{const ty=typeOf(n);if(ty==='project')return'';let v=n.fm.project;if(Array.isArray(v))v=v[0];v=String(v||'').replace(/^\[+|\]+$/g,'').split('|')[0].trim();return v==='ToDo'&&!projectNote('ToDo')?'':v;};
 const todosOf=title=>notes.filter(n=>isTodoNote(n)&&projectOf(n)===title);
-const notesOf=title=>notes.filter(n=>typeOf(n)==='card'&&!isTask(n)&&!isArchived(n)&&projectOf(n)===title);
+const notesOf=title=>notes.filter(n=>typeOf(n)==='note'&&!isTask(n)&&!isArchived(n)&&projectOf(n)===title);
 /* AI 제안(/inbox 가 적어 둔 suggest-project · suggest-label). 아직 적용 안 한 것만 */
 const sugProject=n=>{let v=n.fm['suggest-project'];if(Array.isArray(v))v=v[0];v=String(v||'').replace(/^\[+|\]+$/g,'').trim();return v&&!projectOf(n)&&projectList().includes(v)?v:'';};
 const sugLabels=n=>{let v=n.fm['suggest-label'];v=Array.isArray(v)?v:(v?[String(v)]:[]);const cur=labelsOf(n);return v.filter(l=>labelOpt(l)&&!cur.includes(l));};
 const kindLabel=n=>(isTask(n)?'할 일':TYPE_NAME[typeOf(n)])+(isArchived(n)?' · 보관됨':'');
-const metaOf=(n,g)=>[typeOf(n)!=='card'&&g!=='type'&&!state.type?TYPE_NAME[typeOf(n)]:'',g!=='project'&&projectOf(n)?'▸ '+projectOf(n):''].filter(Boolean).join(' · ');
+const metaOf=(n,g)=>[typeOf(n)!=='note'&&g!=='type'&&!state.type?TYPE_NAME[typeOf(n)]:'',g!=='project'&&projectOf(n)?'▸ '+projectOf(n):''].filter(Boolean).join(' · ');
 /* 파일 이름 = 제목에서 못 쓰는 문자만 뺀 것. 화면에는 원래 제목(H1)을 보여 준다 */
 function fileNameOf(title){return String(title).replace(/[\\/:*?"<>|#^\[\]]/g,' ').replace(/\s+/g,' ').trim().replace(/^\.+/,'').replace(/[. ]+$/,'').slice(0,80).trim()||'메모';}
 function uniquePath(dir,name,self){const taken=p=>notes.some(n=>n!==self&&n.path.toLowerCase()===p.toLowerCase())||queue.list.some(q=>q.op==='put'&&q.path===p);
@@ -891,7 +891,7 @@ function restoreControls(){$('#fGroup').value=state.group;$('#q').value=state.q;
 function readControls(){state.group=$('#fGroup').value||'project';state.q=$('#q').value;}
 
 /* ===================== 노트 탭: 노트 목록 하나 (옆 목록으로 거르고, 보관한 노트는 아래) ===================== */
-const BUILTIN_VIEWS=[{id:'b:all',name:'카드',type:'card',group:'project'}];
+const BUILTIN_VIEWS=[{id:'b:all',name:'노트',type:'note',group:'project'}];
 function renderViews(){}
 async function applyView(sv){
   if(state.view==='docs'&&current&&!await guardDirty())return;
@@ -908,7 +908,7 @@ normState();
 function visible(){
   readControls();
   const{type:ty,project:pj,status:st,label:lb}=state,q=state.q.trim().toLowerCase();
-  let v=notes.filter(n=>(state.arch?isArchived(n):!isArchived(n))&&(!ty||typeOf(n)===ty)&&(!pj||(pj==='__none'?!projectOf(n):projectOf(n)===pj))
+  let v=notes.filter(n=>(state.arch?isArchived(n):!isArchived(n))&&(!ty||typeOf(n)===ty)&&!(ty==='note'&&isTask(n))&&(!pj||(pj==='__none'?!projectOf(n):projectOf(n)===pj))
     &&(!st||n.fm.status===st)&&(!lb||(lb==='__none'?!labelsOf(n).length:labelsOf(n).includes(lb)))
     &&(!q||(n.title+n.body+JSON.stringify(n.fm)).toLowerCase().includes(q)));
   const[k,d]=state.sort.split(':');const dir=+d||1;
@@ -920,7 +920,7 @@ function val(n,k){if(k==='title')return n.title;if(k==='project')return projectO
 /* ===================== 렌더 ===================== */
 /* 노트 보기의 옆 목록: 프로젝트별 · 라벨별. 누르면 그것만 보이고, 새 메모도 거기로 들어간다 */
 function noteSide(){
-  const base=notes.filter(n=>typeOf(n)==='card'&&!isArchived(n));const live=projectList();
+  const base=notes.filter(n=>typeOf(n)==='note'&&!isTask(n)&&!isArchived(n));const live=projectList();
   const pj=new Map([['',0]]);for(const t of live)pj.set(t,0);for(const n of base){const k=projectOf(n);if(k&&!pj.has(k))pj.set(k,0);pj.set(k,pj.get(k)+1);}
   const lb=new Map([['',0]]);for(const o of config.labels)lb.set(o.id,0);for(const n of base){const ls=labelsOf(n);if(!ls.length)lb.set('',lb.get('')+1);for(const l of ls)lb.set(l,(lb.get(l)||0)+1);}
   const side=el('aside',{class:'tdside nside'}),chips=el('div',{class:'tdchips nchips'});
@@ -985,11 +985,11 @@ function render(){
   const v=visible();
   let box=m;
   if(state.saved==='b:all'){const{side,chips}=noteSide();box=el('div',{class:'nmain'});box.append(chips);m.append(el('div',{class:'tdwrap'},box,side));}   // 노트 보기: 옆에 프로젝트·라벨 목록
-  if(!v.length)box.append(el('div',{class:'status'},state.q?'검색에 맞는 카드가 없습니다.':(state.project||state.label)?'여기에 해당하는 카드가 없습니다.':'카드가 없습니다. 위 입력창에 메모를 적어 보세요.'));
+  if(!v.length)box.append(el('div',{class:'status'},state.q?'검색에 맞는 노트가 없습니다.':(state.project||state.label)?'여기에 해당하는 노트가 없습니다.':'노트가 없습니다. 위 입력창에 메모를 적어 보세요.'));
   else ({table:renderTable,board:renderBoard,gallery:renderGallery})[state.view](v,box);
   // 보관한 노트
-  const q=state.q.trim().toLowerCase();const av=notes.filter(n=>typeOf(n)==='card'&&isArchived(n)&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1);
-  if(av.length)box.append(archSection('narch','보관한 카드',av,noteArchOpen,()=>{noteArchOpen=!noteArchOpen;render();}));
+  const q=state.q.trim().toLowerCase();const av=notes.filter(n=>typeOf(n)==='note'&&!isTask(n)&&isArchived(n)&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1);
+  if(av.length)box.append(archSection('narch','보관한 노트',av,noteArchOpen,()=>{noteArchOpen=!noteArchOpen;render();}));
 }
 /* 일괄 선택 */
 let selected=new Set();
@@ -1060,7 +1060,7 @@ function inlineLabelsSug(n){
 }
 /* 폰에서 숨긴 칸(종류·상태·마감)을 제목 아래 한 줄로 */
 function mmeta(n,showType){const ty=typeOf(n);const st=ty==='project'?statusOpt(n.fm.status):null;
-  const parts=[showType&&ty!=='card'?TYPE_NAME[ty]:'',st?st.name:'',n.fm.due?fmtDue(n.fm.due)+(isLate(n)?' · 지남':''):''].filter(Boolean);
+  const parts=[showType&&ty!=='note'?TYPE_NAME[ty]:'',st?st.name:'',n.fm.due?fmtDue(n.fm.due)+(isLate(n)?' · 지남':''):''].filter(Boolean);
   return parts.length?el('div',{class:'mmeta'+(isLate(n)?' late':'')},parts.join(' · ')):'';}
 function renderTable(v,m,mode=''){
   const slim=mode==='inbox'||mode==='recent';const showType=false,showStatus=false;
@@ -1135,7 +1135,7 @@ async function listMenu(p,name,anchor){
       for(const c of mine)await saveNote(c,{list:t},undefined,undefined,true);render();}],
     ...(i>0?[['왼쪽으로',()=>swap(-1)]]:[]),...(i<lists.length-1?[['오른쪽으로',()=>swap(1)]]:[]),
     ...(lists.length>1?[['줄 삭제',async()=>{const mine=listCards(p,lists,name);const rest=lists.filter(x=>x!==name);const to=rest.find(x=>x!==DONE_LIST)||rest[0];
-      if(mine.length&&!await confirmAsk('줄을 삭제할까요?',`"${name}" 줄의 카드 ${mine.length}개는 지우지 않고 "${to}" 줄로 옮깁니다.`,'삭제'))return;
+      if(mine.length&&!await confirmAsk('줄을 삭제할까요?',`"${name}" 줄에 있는 ${mine.length}개는 지우지 않고 "${to}" 줄로 옮깁니다.`,'삭제'))return;
       await saveNote(p,{lists:rest},undefined,undefined,true);for(const c of mine)await saveNote(c,{list:to},undefined,undefined,true);render();},'danger']]:[])]);
 }
 /* 프로젝트 줄: 어디서든 한 번에 바꾸고 만든다 — [전체] [프로젝트…] [+ 프로젝트] */
@@ -1180,7 +1180,7 @@ function renderProjects(m){
         ondrop:async e=>{e.preventDefault();const d=projDrag;projDrag=null;clear();if(!d||d.list!==list||d.before===undefined||d.before===d.n)return;await moveProject(d.n,list,d.before);}},
         canSort?el('span',{class:'grip','aria-hidden':'true',title:'끌어서 순서 바꾸기'},'⋮⋮'):'',el('b',{},n.title),labelTag(n),el('span',{class:'sp'}),
         n.fm.due?el('span',{class:'pm'+(isLate(n)?' late':'')},'마감 '+fmtDue(n.fm.due)):'',
-        el('span',{class:'pm'},cn?`카드 ${cn}`:'카드 없음'),
+        el('span',{class:'pm'},cn?`${cn}개`:'비어 있음'),
         el('span',{class:'pp2'},tl.length?el('i',{class:'pbar'},el('u',{style:`width:${Math.round(d/tl.length*100)}%`})):'',el('span',{class:'pm'},tl.length?`${d}/${tl.length}`:'')));
       box.append(row);}
     m.append(el('h4',{class:'pgh'},name,el('small',{},String(list.length))),box);}
@@ -1212,10 +1212,10 @@ function renderProjectBoard(m,p,q){
         el('div',{class:'ct'},todo?doneBox(n):'',el('span',{},n.title)),
         el('div',{class:'cm'},dueEl(n),labelTag(n),progEl(n)));
       body.append(c);}
-    const ai=el('input',{placeholder:'+ 카드',title:'"금요일 보고서"처럼 날짜를 적으면 할 일이 됩니다','aria-label':`${name}에 카드 추가`,autocomplete:'off',enterkeyhint:'done'});
+    const ai=el('input',{placeholder:'+ 추가 (날짜를 적으면 할 일)',title:'"금요일 보고서"처럼 날짜를 적으면 할 일, 아니면 노트가 됩니다','aria-label':`${name}에 추가`,autocomplete:'off',enterkeyhint:'done'});
     const addCard=async()=>{const t=ai.value.trim();if(!t)return;ai.value='';projFocus=name;const w=parseWhen(t);
       const last=cards.length&&cards.every(c=>ordOf(c)!==null)?{order:ordOf(cards[cards.length-1])+1}:{};
-      await createNote({type:'card',title:w&&w.rest?w.rest:t,due:w&&w.rest?w.due:'',project:p.title,quiet:true,extra:{list:name,...(name===DONE_LIST?{status:'done'}:{}),...last}});render();};
+      await createNote({type:'note',title:w&&w.rest?w.rest:t,due:w&&w.rest?w.due:'',project:p.title,quiet:true,extra:{list:name,...(name===DONE_LIST?{status:'done'}:{}),...last}});render();};
     col.append(el('form',{class:'cadd',onsubmit:e=>{e.preventDefault();addCard();}},ai,el('button',{type:'submit',class:'btn sm'},'추가')));
     board.append(col);}
   const li=el('input',{placeholder:'+ 줄 추가','aria-label':'줄 추가',autocomplete:'off',enterkeyhint:'done'});
@@ -1290,8 +1290,8 @@ async function archiveDoneTodos(list){
   for(const n of list)await saveNote(n,{archived:true},undefined,undefined,true);toast(`${list.length}개를 보관했습니다`);render();
 }
 /* 새 노트 만들기 (종류가 폴더를, 제목이 파일 이름을 정한다) */
-async function createNote({type='card',title,project='',label='',due='',body='',tpl=null,quiet=false,extra=null}){
-  if(type==='todo'){type='card';extra={todo:true,...(extra||{})};}else if(type!=='project')type='card';   // 할 일 = 할 일로 표시한 카드
+async function createNote({type='note',title,project='',label='',due='',body='',tpl=null,quiet=false,extra=null}){
+  if(type==='todo'){type='note';extra={todo:true,...(extra||{})};}else if(type!=='project')type='note';   // 할 일 = 할 일로 표시한 노트
   title=String(title||'').trim();if(!title)return null;
   const path=uniquePath(FOLDER_OF[type],fileNameOf(title));
   const base={type,...(type==='project'?{status:'active'}:{}),...(project?{project:pjLink(project)}:{}),...(label?{label}:{}),...(due?{due}:{}),created:today(),...(extra||{})};
@@ -1490,7 +1490,7 @@ function renderDocs(m){
   for(const f of FOLDERS){const list=notes.filter(n=>n.folder===f&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>a.title.localeCompare(b.title));
     if(!list.length&&(q||LEGACY_FOLDERS.includes(f)))continue;
     const h=el('h4',{},f.replace(/^\d+_/,'')+(list.length?` ${list.length}`:''));
-    const mkType={'10_Projects':'project','20_Cards':'card'}[f];if(mkType)h.append(el('button',{title:'새 '+TYPE_NAME[mkType],onclick:()=>newNote(mkType)},'+'));
+    const mkType={'10_Projects':'project','20_Notes':'note'}[f];if(mkType)h.append(el('button',{title:'새 '+TYPE_NAME[mkType],onclick:()=>newNote(mkType)},'+'));
     tree.append(h);
     for(const n of list){const sub=n.path.split('/').slice(1,-1).join('/');tree.append(el('button',{class:'tn','aria-current':current===n?'true':'false',onclick:()=>{openNote(n);wrap.classList.add('m-edit');}},sub?el('small',{style:'color:var(--fg3);margin-right:4px'},sub+'/'):'',n.title));}}
   const editor=el('div',{class:'editor'});
@@ -1568,9 +1568,9 @@ function saveNote(n,patch,newTitle,newBody,quiet,retry=true){
 }
 /* 속성을 새 구조로 맞춘다: 종류 4가지, 보관은 archived, 옛 "할 일" 라벨·ToDo 프로젝트·protected 제거 */
 function normFM(fm,wasType,legacyTask){
-  if(legacyTask&&fm.todo===undefined)fm.todo=true;                 // 옛 할 일 노트 → 할 일로 표시한 카드
+  if(legacyTask&&fm.todo===undefined)fm.todo=true;                 // 옛 할 일 → 할 일로 표시한 노트
   if(wasType&&fm.type!==wasType)fm.type=wasType;
-  if(fm.type!=='project')fm.type='card';
+  if(fm.type!=='project')fm.type='note';
   if(fm.status==='archived'){fm.archived=true;fm.status='';}
   if(!labelOpt('todo')&&rawLabels({fm}).includes('todo'))fm.label=packLabels(labelsOf({fm}));
   if(fm.project==='ToDo'&&!projectNote('ToDo'))fm.project='';
@@ -1658,7 +1658,7 @@ async function syncFolders(){
   if(k)toast(`폴더를 속성에 맞췄습니다 · ${k}개`,3000);
 }
 async function archiveNote(n){
-  if(!await okAsk('보관할까요?',`"${n.title}" — 목록에서 빠집니다. ${isTask(n)?'할 일 탭 아래 "보관된 할 일"':'카드 탭 아래 "보관한 카드"'}에서 되살릴 수 있습니다.`,'보관'))return;
+  if(!await okAsk('보관할까요?',`"${n.title}" — 목록에서 빠집니다. ${isTask(n)?'할 일 탭 아래 "보관된 할 일"':'노트 탭 아래 "보관한 노트"'}에서 되살릴 수 있습니다.`,'보관'))return;
   await saveNote(n,{archived:true},undefined,undefined,true);toast('보관했습니다');
 }
 async function unarchive(n){
@@ -1671,13 +1671,13 @@ async function unarchive(n){
   const raw=buildFM(fm)+n.body.replace(/^\n+/,'');const dir=FOLDER_OF[ty];
   if(await relocate(n,uniquePath(dir,fileTitle(n.path),n),false,{raw,fm})){await after();toast('되살렸습니다');}
 }
-/* 카드 ↔ 할 일(표시만 바뀜), 카드 → 프로젝트 */
+/* 노트 ↔ 할 일(표시만 바뀜), 노트 → 프로젝트 */
 async function convert(n,to){
   let patch;
   if(to==='todo')patch={todo:true};
   else if(to==='note')patch={todo:'',due:'',status:''};
   else{if(projectNote(n.title)){toast('같은 이름의 프로젝트가 있습니다');return;}
-    if(!await okAsk('프로젝트로 키울까요?',`"${n.title}" 카드가 프로젝트가 됩니다. 설명과 체크리스트는 그대로 남습니다.`,'키우기'))return;
+    if(!await okAsk('프로젝트로 키울까요?',`"${n.title}"이(가) 프로젝트가 됩니다. 설명과 체크리스트는 그대로 남습니다.`,'키우기'))return;
     patch={type:'project',status:n.fm.status==='done'?'done':'active',project:'',todo:'',list:'',order:''};}
   await saveNote(n,patch,undefined,undefined,true);fillFolders();toast({todo:'할 일로 표시했습니다',note:'할 일에서 뺐습니다',project:'프로젝트로 키웠습니다'}[to]);
 }
@@ -1696,7 +1696,7 @@ function noteActions(n){
   a.push([$('#panel').classList.contains('wide')?'좁게':'넓게',()=>$('#panel').classList.toggle('wide')],['복제',()=>duplicateNote(n)]);
   if(isArchived(n))a.push(['되살리기',()=>unarchive(n),'pri']);
   else{
-    if(ty==='card')a.push(isTask(n)?['할 일 해제',()=>convert(n,'note')]:['할 일로',()=>convert(n,'todo'),'pri'],['프로젝트로 키우기',()=>convert(n,'project')]);
+    if(ty==='note')a.push(isTask(n)?['할 일 해제',()=>convert(n,'note')]:['할 일로',()=>convert(n,'todo'),'pri'],['프로젝트로 키우기',()=>convert(n,'project')]);
     if(ty==='project')a.push(['프로젝트 끝내기',()=>finishProject(n),'pri']);
     if(ty!=='project')a.push(['보관',()=>archiveNote(n)]);
   }
@@ -1747,7 +1747,7 @@ async function fromTemplate(name,title){
   catch{return null;}
 }
 async function newNote(type,project=''){
-  const title=(await ask({note:'새 카드',card:'새 카드',todo:'새 할 일',project:'새 프로젝트'}[type],{placeholder:type==='todo'?'할 일 내용 (금요일 보고서처럼 날짜도 됩니다)':'제목',msg:project?`프로젝트: ${project}`:''})||'').trim();if(!title)return null;
+  const title=(await ask({note:'새 노트',todo:'새 할 일',project:'새 프로젝트'}[type],{placeholder:type==='todo'?'할 일 내용 (금요일 보고서처럼 날짜도 됩니다)':'제목',msg:project?`프로젝트: ${project}`:''})||'').trim();if(!title)return null;
   if(type==='todo'){const w=parseWhen(title);await addTodoNote(w&&w.rest?w.rest:title,w&&w.rest?w.due:null,false,project);return null;}
   if(type==='project'&&projectNote(title)){toast('같은 이름의 프로젝트가 있습니다');return null;}
   const n=await createNote({type,title,project,tpl:type==='project'?'Project':null});if(n)openNote(n);return n;
@@ -1791,7 +1791,7 @@ function renderCard(n){
   const chips=el('div',{class:'chiprow'});
   if(ty==='project'){const st=statusOpt(n.fm.status);const stChip=el('span',{class:'chip'+(n.fm.status?' set':''),title:'상태'},n.fm.status?(st?tagEl(st):n.fm.status):'+ 상태');
     const stSel=el('select',{'aria-label':'상태',onchange:async e=>{await saveNote(n,{status:e.target.value},undefined,undefined,true);fillFolders();}});stSel.append(el('option',{value:''},'—'));for(const o of config.statuses)stSel.append(el('option',{value:o.id},o.name));if(n.fm.status&&!config.statuses.some(o=>o.id===n.fm.status))stSel.append(el('option',{value:n.fm.status},n.fm.status));stSel.value=n.fm.status||'';stChip.append(stSel);chips.append(stChip);}
-  if(ty==='card'){const pj=projectOf(n),pn=pj?projectNote(pj):null,live=projectList();
+  if(ty==='note'){const pj=projectOf(n),pn=pj?projectNote(pj):null,live=projectList();
     const pc=el('span',{class:'chip'+(pj?' set':''),title:'프로젝트','data-chip':'project'},pj?`프로젝트: ${pj}${pn?(isArchived(pn)?' (보관됨)':pn.fm.status==='done'?' (끝남)':''):' (없는 프로젝트)'}`:'+ 프로젝트');
     const ps=el('select',{'aria-label':'프로젝트',onchange:async e=>{await saveNote(n,{project:pjLink(e.target.value),'suggest-project':''},undefined,undefined,true);}});
     ps.append(el('option',{value:''},'프로젝트 없음'));for(const t of [...new Set([...live,...(pj?[pj]:[])])])ps.append(el('option',{value:t},t));ps.value=pj;pc.append(ps);chips.append(pc);}
@@ -1831,14 +1831,14 @@ function renderCard(n){
       if(await addTodoNote(text,w?w.due:null,true,n.title)){render();renderCard(n);setTimeout(()=>$('#card .cl .add input')?.focus(),0);}};
     cl.append(el('form',{class:'add',onsubmit:e=>{e.preventDefault();addGo();}},add,el('button',{type:'submit',class:'btn sm'},'추가')));ps.append(cl);box.append(ps);
     const nl=notesOf(n.title).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1);
-    const ns=el('section',{'data-sec':'notes'});ns.append(el('h3',{},'카드',el('span',{class:'evnote'},nl.length?String(nl.length)+' · 할 일이 아닌 것':''),el('span',{class:'sp'})));
+    const ns=el('section',{'data-sec':'notes'});ns.append(el('h3',{},'노트',el('span',{class:'evnote'},nl.length?String(nl.length):''),el('span',{class:'sp'})));
     const nb=el('div',{class:'cl'});
     for(const x of nl){const lo=labelOpt(labelsOf(x)[0]);nb.append(el('button',{class:'mrow',onclick:()=>openNote(x)},el('span',{class:'t'},x.title),lo?tagEl(lo):'',el('small',{},String(val(x,'updated')).slice(5))));}
     if(!nl.length)nb.append(el('div',{class:'evnote',style:'padding:4px 2px'},'없습니다.'));
     nb.append(el('div',{style:'display:flex;gap:6px;padding:8px 0 2px'},
-      el('button',{class:'btn sm',onclick:()=>newNote('card',n.title)},'+ 새 카드'),
-      el('button',{class:'btn sm',onclick:async()=>{const c=notes.filter(x=>typeOf(x)==='card'&&!isArchived(x)&&!projectOf(x)).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1).slice(0,60);if(!c.length){toast('프로젝트 없는 카드가 없습니다');return;}
-        const p=await ask('넣을 카드',{options:c.map(x=>({value:x.path,label:x.title})),ok:'넣기'});const x=p&&notes.find(y=>y.path===p);if(x){await saveNote(x,{project:pjLink(n.title),'suggest-project':''},undefined,undefined,true);renderCard(n);}}},'+ 기존 카드 넣기')));
+      el('button',{class:'btn sm',onclick:()=>newNote('note',n.title)},'+ 새 노트'),
+      el('button',{class:'btn sm',onclick:async()=>{const c=notes.filter(x=>typeOf(x)==='note'&&!isTask(x)&&!isArchived(x)&&!projectOf(x)).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1).slice(0,60);if(!c.length){toast('프로젝트 없는 노트가 없습니다');return;}
+        const p=await ask('넣을 노트',{options:c.map(x=>({value:x.path,label:x.title})),ok:'넣기'});const x=p&&notes.find(y=>y.path===p);if(x){await saveNote(x,{project:pjLink(n.title),'suggest-project':''},undefined,undefined,true);renderCard(n);}}},'+ 기존 노트 넣기')));
     ns.append(nb);box.append(ns);
   }
   // 체크리스트
@@ -2026,8 +2026,8 @@ $('#sSave').onclick=async()=>{
 /* ===================== 커맨드 팔레트 ===================== */
 let palItems=[],palIdx=0,palPick=null;
 function palCommands(){
-  const c=[{k:'새로',n:'빠른 메모',run:async()=>{if(!['table','board','gallery'].includes(state.view))await switchView(lastNotesView);$('#quickText').focus();}},{k:'새로',n:'카드',run:()=>newNote('card')},{k:'새로',n:'할 일',run:()=>newNote('todo')},{k:'새로',n:'프로젝트',run:()=>newNote('project')}];
-  for(const[v,name]of[['docs','문서'],['table','카드 · 표'],['board','카드 · 보드'],['gallery','카드 · 갤러리'],['projects','프로젝트'],['todo','할 일'],['calendar','일정']])c.push({k:'탭',n:name,run:()=>switchView(v)});
+  const c=[{k:'새로',n:'빠른 메모',run:async()=>{if(!['table','board','gallery'].includes(state.view))await switchView(lastNotesView);$('#quickText').focus();}},{k:'새로',n:'노트',run:()=>newNote('note')},{k:'새로',n:'할 일',run:()=>newNote('todo')},{k:'새로',n:'프로젝트',run:()=>newNote('project')}];
+  for(const[v,name]of[['docs','문서'],['table','노트 · 표'],['board','노트 · 보드'],['gallery','노트 · 갤러리'],['projects','프로젝트'],['todo','할 일'],['calendar','일정']])c.push({k:'탭',n:name,run:()=>switchView(v)});
   if(gcal.on()){c.push({k:'일정',n:'새 일정',run:()=>newEvent(today())},{k:'일정',n:'일정 검색…',run:async()=>{const q=await ask('일정 검색',{placeholder:'제목·장소 단어'});if(q){await switchView('calendar');searchEvents(q);}}});}
   if(current){const n=current;for(const[t,fn]of noteActions(n))c.push({k:'이 노트',n:t,run:fn});}
   c.push({k:'동작',n:'새로고침 (캐시 비움)',run:()=>{localStorage.removeItem('brain.cache');load();}});
