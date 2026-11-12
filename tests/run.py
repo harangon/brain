@@ -22,7 +22,11 @@ def lists(pg):return pg.eval_on_selector_all('.tlist[data-list]','e=>e.map(x=>x.
 def drag(pg,src,dst,pos=None):
     kw={'target_position':pos} if pos else {}
     pg.drag_and_drop(src,dst,**kw);idle(pg,600)
-def tab(pg,name):pg.click(f'.tabs:not(.sub) button:text-is("{name}")');idle(pg)
+def tab(pg,name):
+    if name=='문서':
+        if pg.get_attribute('#btnDocs','aria-pressed')!='true':pg.click('#btnDocs')
+    else:pg.click(f'.tabs:not(.sub) button:text-is("{name}")')
+    idle(pg)
 def side(pg,k,v):pg.click(f'.nside button[data-k="{k}"][data-v="{v}"]');idle(pg)
 def rows(pg):return pg.eval_on_selector_all('#main tbody tr td.t>button:first-child','e=>e.map(x=>x.textContent)')
 def open_row(pg,title):pg.click(f'#main td.t>button:first-child:text-is("{title}")');idle(pg)
@@ -215,6 +219,9 @@ def t_misc(pg):
     tab(pg,'일정');assert pg.locator('.calgrid .day').count()==42
     pg.fill('.evbar input[type=search]','치과');pg.press('.evbar input[type=search]','Enter');idle(pg);assert '검색 결과 · 1건' in pg.inner_text('#main')
     pg.click('#main button:text-is("닫기")');idle(pg);assert pg.locator('.calgrid .day').count()==42 and '마감 노트' not in pg.inner_text('#main');shot(pg,'07-calendar')
+    # 문서는 탭이 아니라 오른쪽 아이콘. 다시 누르면 보던 탭으로. 새로고침 버튼은 없다
+    assert pg.locator('.tabs:not(.sub) button').count()==4 and pg.locator('#btnReload').count()==0 and pg.eval_on_selector_all('header .icon','e=>e.map(x=>x.id)')[:2]==['btnDocs','btnPalette']
+    pg.click('#btnDocs');idle(pg);assert pg.is_visible('.tree') and pg.get_attribute('#btnDocs','aria-pressed')=='true';pg.click('#btnDocs');idle(pg);assert pg.locator('.calgrid .day').count()==42 and pg.get_attribute('#btnDocs','aria-pressed')=='false'
     tab(pg,'문서');assert not pg.is_visible('#quick') and pg.locator('.nside').count()==0,'문서 탭에는 메모 입력·옆 목록이 없어야 함'
     tree=pg.inner_text('.tree');assert 'Notes' in tree and 'Todos' in tree and 'Inbox' not in tree,tree
     pg.click('.tree .tn:has-text("수납 아이디어")');idle(pg);assert pg.input_value('#pTitle')=='수납 아이디어' and pg.inner_text('#pPath')=='20_Notes/수납 아이디어.md'

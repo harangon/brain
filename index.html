@@ -50,7 +50,7 @@ header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px so
 button.pill{cursor:pointer}button.pill[aria-expanded=true]{background:var(--bg2);color:var(--fg)}
 input.search{padding:5px 9px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg);min-width:110px}
 .icon{width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;border-radius:var(--radius);color:var(--fg2)}
-.icon:hover{background:var(--bg2);color:var(--fg)}
+.icon:hover,.icon[aria-pressed=true]{background:var(--bg2);color:var(--fg)}
 .views{display:flex;gap:4px;padding:0 12px 8px;flex-wrap:wrap;align-items:center}
 .views button{padding:3px 10px;border-radius:14px;font-size:13px;color:var(--fg2);border:1px solid transparent}
 .views button:hover{background:var(--bg2)}
@@ -454,7 +454,6 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   <div class="bar">
     <span class="title">brain</span>
     <div class="tabs" role="tablist">
-      <button role="tab" data-view="docs">문서</button>
       <button role="tab" data-view="notes" aria-selected="true">노트</button>
       <button role="tab" data-view="projects">프로젝트</button>
       <button role="tab" data-view="todo">할 일</button>
@@ -468,8 +467,8 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
     <span class="pill" id="pillGroup">그룹 <select id="fGroup"><option value="project">프로젝트</option><option value="label">라벨</option></select></span>
     <input class="search" id="q" type="search" placeholder="검색" aria-label="검색">
     <span class="sp"></span>
+    <button class="icon" id="btnDocs" title="문서 — 폴더별 파일 보기와 마크다운 편집" aria-label="문서" aria-pressed="false"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></button>
     <button class="icon" id="btnPalette" title="명령 (Ctrl+K)" aria-label="명령">⌘</button>
-    <button class="icon" id="btnReload" title="새로고침" aria-label="새로고침">↻</button>
     <span class="qbadge" id="qbadge" hidden></span>
     <button class="icon" id="btnSettings" title="설정" aria-label="설정">⚙</button>
   </div>
@@ -967,6 +966,7 @@ function render(){
   const isNotes=['table','board','gallery'].includes(state.view);
   document.querySelectorAll('.tabs:not(.sub) button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view==='notes'?isNotes:b.dataset.view===state.view));
   document.querySelectorAll('#subtabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===state.view));
+  $('#btnDocs').setAttribute('aria-pressed',String(state.view==='docs'));
   $('#subtabs').style.display=isNotes?'':'none';
   $('#pillGroup').style.display=state.view==='board'?'':'none';
   $('#q').style.display=(isNotes||state.view==='todo'||state.view==='projects')?'':'none';
@@ -2064,7 +2064,9 @@ let lastNotesView=['table','board','gallery'].includes(state.view)?state.view:'t
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{const v=b.dataset.view;if(['table','board','gallery'].includes(v)){lastNotesView=v;if(state.saved){state.subOf=state.subOf||{};state.subOf[state.saved]=v;}}switchView(v==='notes'?lastNotesView:v);});
 $('#fGroup').onchange=()=>{readControls();render();};
 let qT;$('#q').oninput=()=>{clearTimeout(qT);qT=setTimeout(()=>{readControls();render();},120);};
-$('#btnReload').onclick=()=>{localStorage.removeItem('brain.cache');load();};
+/* 문서: 머리줄 오른쪽 아이콘. 다시 누르면 보던 탭으로 돌아간다 */
+let beforeDocs='';
+$('#btnDocs').onclick=()=>{if(state.view==='docs')switchView(beforeDocs&&beforeDocs!=='docs'?beforeDocs:lastNotesView);else{beforeDocs=state.view;switchView('docs');}};
 $('#qbadge').onclick=async()=>{if(!queue.list.length)return;if(navigator.onLine){await queue.flush();if(!queue.list.length)return;}if(await confirmAsk('대기 중인 변경을 버릴까요?',queue.list.map(x=>`${x.op==='del'?'삭제':'저장'} ${x.path}`).join('\n'),'버리기')){queue.list=[];queue.save();}};
 
 /* 새 버전 감지: 서비스 워커가 새 파일을 받으면 띠를 띄우고, 누르면 새로고침 */
