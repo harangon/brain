@@ -424,6 +424,44 @@ def t_repeat(pg):
     pg.evaluate("(async()=>{const p=projectNote('반복 프로젝트'),n=notes.find(x=>x.title==='주간 점검');await moveCard(n,p,DONE_LIST,null);})()");idle(pg,800)
     c=fget(pg,'20_Notes/주간 점검.md');assert f"due: {pg.evaluate('addDays(today(),7)')}" in c and 'status' not in c and 'list: 완료' not in c,c
 
+FUZZ=r"""()=>{
+  const parts=['글 한 줄','둘째 줄 **굵게** 와 [[다른 노트]]','','## 요약','주장 한 문장','- 목록 하나','- 목록 둘','## 준비','- [ ] 할 것','- [x] 한 것','- [ ] 날짜 📅 2026-11-20','## 참고','- https://example.com/a','- [제목](https://example.com/b)','- 그냥 메모','![그림](_attachments/a.png)','![[b.png]]','## 연결','- [[옛 메모]]','- [[또 다른]]','## 빈 제목','```','## 코드 속 제목','- [ ] 코드 속','```','1. 번호 목록','> 인용','| a | b |','| - | - |','### 작은 제목','문장 끝 https://example.com/c.','- [ ] 제목 없는 항목','## 체크리스트','## 메모','본문 아래 글'];
+  let seed=7;const rnd=()=>{seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;};
+  const bad=[];const norm=s=>s.split('\n').map(l=>l.trim()).filter(Boolean).sort().join('\n');
+  for(let k=0;k<4000;k++){
+    const n=1+Math.floor(rnd()*12);const lines=[];for(let i=0;i<n;i++)lines.push(parts[Math.floor(rnd()*parts.length)]);
+    const body='# 제목\n\n'+lines.join('\n')+'\n';
+    try{
+      const sp=splitBody(body);
+      // 1) 설명을 그대로 다시 넣어도 내용이 사라지지 않는다 (만들어 넣는 "## 체크리스트" 제목만 늘 수 있다)
+      const out=composeBody(body,sp.desc);const a=norm(stripH1(body)),b=norm(out.replace(/^## 체크리스트$/gm,m=>a.includes('## 체크리스트')?m:''));
+      const lost=a.split('\n').filter(l=>!b.split('\n').includes(l));
+      if(lost.length)bad.push(['lost',body,out,lost]);
+      // 2) 한 번 정리한 것은 다시 정리해도 같다
+      const sp2=splitBody('# 제목\n\n'+out);const out2=composeBody('# 제목\n\n'+out,sp2.desc);if(out2!==out)bad.push(['unstable',out,out2]);
+      // 3) 편집기를 거쳐도 설명이 같다
+      const d=document.createElement('div');mdToEdit(sp.desc,d);const back=editToMd(d);
+      if(back!==sp.desc.replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim())bad.push(['editor',sp.desc,back]);
+      // 4) 체크리스트·참고·연결 개수가 정리 뒤에도 같다
+      const c1=sp.groups.reduce((x,g)=>x+g.items.length,0),c2=sp2.groups.reduce((x,g)=>x+g.items.length,0);
+      if(c1!==c2||sp.refLines.length!==sp2.refLines.length||sp.linkLines.length!==sp2.linkLines.length)bad.push(['count',body,out,[c1,c2,sp.refLines.length,sp2.refLines.length,sp.linkLines.length,sp2.linkLines.length]]);
+    }catch(e){bad.push(['throw',body,String(e)]);}
+    if(bad.length>=8)break;
+  }
+  return bad;
+}"""
+def t_fuzz(pg):
+    """본문 나누기·정리·편집기를 무작위 본문으로 돌려도 내용이 사라지거나 흔들리지 않는다"""
+    bad=pg.evaluate(FUZZ);assert not bad,bad[:2]
+    # 프로젝트를 빼면 보드 자리(list·order)도 지워지고, 다른 프로젝트로 옮기면 첫 줄에서 시작한다
+    pg.evaluate("(async()=>{await createNote({type:'project',title:'자리 A',quiet:true});await createNote({type:'project',title:'자리 B',quiet:true});await createNote({type:'note',title:'자리 노트',project:'자리 A',quiet:true,extra:{list:'진행 중',order:3}});})()");idle(pg,900)
+    P='20_Notes/자리 노트.md';assert 'list: 진행 중' in fget(pg,P)
+    pg.evaluate("p=>saveNote(notes.find(n=>n.path===p),{project:pjLink('자리 B')},undefined,undefined,true)",P);idle(pg,600);c=fget(pg,P);assert '[[자리 B]]' in c and 'list' not in c and 'order' not in c,c
+    pg.evaluate("p=>saveNote(notes.find(n=>n.path===p),{list:'진행 중',order:1},undefined,undefined,true)",P);idle(pg,600)
+    pg.evaluate("p=>saveNote(notes.find(n=>n.path===p),{project:''},undefined,undefined,true)",P);idle(pg,600);c=fget(pg,P);assert 'project' not in c and 'list' not in c and 'order' not in c,c
+    # 주소 링크: 문장 속 주소만 링크가 되고 이미 링크인 것은 두 번 감싸지 않는다
+    h=pg.evaluate("mdToHtml('보기 https://example.com/a. 그리고 [제목](https://example.com/b) 끝')");assert h.count('<a ')==2 and 'href="https://example.com/a"' in h and '>제목</a>' in h and 'example.com/a</a>.' in h,h
+
 def t_settings(pg):
     pg.click('#btnSettings');idle(pg,200);tabs=pg.inner_text('#settings .mh');assert '저장한 보기' not in tabs and '뷰' not in pg.inner_text('#settings')
     pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
@@ -491,7 +529,7 @@ def t_unit(pg):
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
-TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_settings,t_offline,t_stale,t_edit,t_refs,t_ended,t_repeat]
+TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_settings,t_offline,t_stale,t_edit,t_refs,t_ended,t_repeat,t_fuzz]
 if os.environ.get('ONLY'):TESTS=[x for x in TESTS if x.__name__ in os.environ['ONLY'].split(',')]   # 일부만: ONLY=t_edit python3 tests/run.py
 with sync_playwright() as p:
     b=p.chromium.launch();pg0=None;pg=b.new_page(viewport={'width':1280,'height':860},timezone_id='Asia/Seoul');errs=[]   # 한국 시간으로 돌린다 (날짜 계산이 시간대에 흔들리지 않는지)

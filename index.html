@@ -869,7 +869,7 @@ function mdToHtml(md){
   h=h.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g,(_,a,u)=>`<img alt="${a}" data-src="${u}">`).replace(/!\[\[([^\]|]+\.(?:png|jpe?g|gif|webp|svg))(?:\|[^\]]*)?\]\]/gi,(_,f)=>`<img alt="${f}" data-src="_attachments/${f}">`);
   h=h.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g,(_,t,a)=>`<a class="wl" href="#" data-wl="${t}">${a||t}</a>`);
   h=h.replace(/(^|[^!])\[([^\]\n]+)\]\((https?:[^)\s]+)\)/g,(_,pre,t,u)=>`${pre}<a class="xl" href="${u}" target="_blank" rel="noopener">${t}</a>`);
-  h=h.replace(/(?<![="'>\/\w])https?:\/\/[^\s<"']+/g,u0=>{let u=u0;const cut=u.match(/(?:[.,;:!?)\]]|&[a-z]+;)+$/);const tail=cut?cut[0]:'';if(tail)u=u.slice(0,-tail.length);return `<a class="xl" href="${u}" target="_blank" rel="noopener">${urlLabel(u)}</a>${tail}`;});
+  h=h.replace(/(^|[^="'>\/\w])(https?:\/\/[^\s<"']+)/g,(_,pre,u0)=>{let u=u0;const cut=u.match(/(?:[.,;:!?)\]]|&[a-z]+;)+$/);const tail=cut?cut[0]:'';if(tail)u=u.slice(0,-tail.length);return pre+`<a class="xl" href="${u}" target="_blank" rel="noopener">${urlLabel(u)}</a>${tail}`;});
   h=h.replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');
   h=h.replace(/&lt;!--[\s\S]*?--&gt;/g,'');
   h=h.replace(/\n{2,}/g,'</p><p>').replace(/\n/g,'<br>');
@@ -1687,6 +1687,7 @@ function showPreview(on){
 /* 같은 노트의 저장은 순서대로(겹치면 sha가 어긋나 409가 난다) */
 const saveLocks={};let saving=0;
 function saveNote(n,patch,newTitle,newBody,quiet,retry=true){
+  if(patch&&'project' in patch&&typeOf(n)!=='project'&&String(patch.project||'')!==String(n.fm.project||'')){if(!('list' in patch))patch={...patch,list:''};if(!('order' in patch))patch={...patch,order:''};}   // 다른 프로젝트로 옮기면 그 보드의 첫 줄에서 시작한다
   if(patch&&patch.status==='done'&&n.fm.status!=='done'&&repeatOf(n)){const nd=nextDue(n);
     if(nd){patch={...patch,status:'',due:nd};if(patch.list===DONE_LIST)delete patch.list;   // 완료 줄로 옮겨도 제자리에 남는다
       if(newBody===undefined&&/^\s*[-*]\s*\[[xX]\]/m.test(n.body))newBody=stripH1(n.body).replace(/^(\s*[-*]\s*)\[[xX]\]/gm,'$1[ ]');   // 체크리스트는 다시 비운다
@@ -1702,7 +1703,8 @@ function normFM(fm,wasType,legacyTask){
   if(fm.status==='archived'){fm.archived=true;fm.status='';}
   if(!labelOpt('todo')&&rawLabels({fm}).includes('todo'))fm.label=packLabels(labelsOf({fm}));
   if(fm.project==='ToDo'&&!projectNote('ToDo'))fm.project='';
-  if(fm.type==='project'){fm.project='';delete fm.todo;delete fm.list;}
+  if(fm.type==='project'){fm.project='';delete fm.todo;delete fm.list;delete fm.repeat;delete fm['repeat-day'];delete fm['repeat-until'];delete fm.pin;}
+  else if(!fm.project){delete fm.list;delete fm.order;}   // 프로젝트가 없으면 보드의 줄·순서도 없다
   delete fm.protected;return fm;
 }
 async function saveNoteNow(n,patch,newTitle,newBody,quiet,retry){
@@ -1894,14 +1896,16 @@ let descEditing=false;const actCache={};
 /* 본문을 설명 / 체크리스트 / 첨부 / 연결로 나눈다. 화면에서는 파일 형식(마크다운)을 보이지 않는다.
    kind[i]: 줄마다 'desc'(설명) · 'cl'(체크리스트 제목·항목) · 'img'(이미지만 있는 줄) · 'link'("## 연결" 묶음) */
 const REF_LINE=/^\s*[-*]\s+(.+)$/;const IMG_LINE=/^\s*(?:!\[[^\]]*\]\([^)\s]+\)|!\[\[[^\]]+\]\])\s*$/;const LINK_LINE=/^\s*[-*]\s*\[\[([^\]|]+)(?:\|[^\]]*)?\]\]\s*$/;
+/* 코드 블록(``` … ```) 안인지 줄마다 표시한다. 닫히지 않은 ``` 는 코드 블록으로 보지 않는다 */
+function fenceMap(lines){const m=lines.map(()=>false);let open=-1;lines.forEach((ln,i)=>{if(!/^```/.test(ln))return;if(open<0)open=i;else{for(let k=open;k<=i;k++)m[k]=true;open=-1;}});return m;}
 function splitBody(body){
   const lines=stripH1(body).split('\n');const kind=lines.map(()=>'desc');const groups=[];const linkLines=[];const refLines=[];
-  const heads=[];let fence=false;lines.forEach((ln,i)=>{if(/^```/.test(ln)){fence=!fence;return;}if(!fence&&/^#{2,6}\s+\S/.test(ln))heads.push(i);});
+  const inFence=fenceMap(lines);const heads=[];lines.forEach((ln,i)=>{if(!inFence[i]&&/^#{2,6}\s+\S/.test(ln))heads.push(i);});
   const secs=[{head:-1,from:0,to:heads.length?heads[0]:lines.length},...heads.map((h,k)=>({head:h,from:h+1,to:heads[k+1]??lines.length}))];
   for(const sc of secs){
     const heading=sc.head>=0?lines[sc.head].replace(/^#+\s+/,'').trim():'';
-    const content=[];for(let i=sc.from;i<sc.to;i++)if(lines[i].trim())content.push(i);
-    const items=content.filter(i=>parseTodo(lines[i]));
+    const content=[];for(let i=sc.from;i<sc.to;i++)if(lines[i].trim()&&!(IMG_LINE.test(lines[i])&&!inFence[i]))content.push(i);   // 이미지만 있는 줄은 첨부라서 묶음의 내용으로 세지 않는다
+    const items=content.filter(i=>!inFence[i]&&parseTodo(lines[i]));
     if(sc.head>=0&&heading==='연결'&&content.length&&content.every(i=>LINK_LINE.test(lines[i]))){for(let i=sc.head;i<sc.to;i++)kind[i]='link';content.forEach(i=>linkLines.push({line:i,target:lines[i].match(LINK_LINE)[1].trim()}));continue;}
     if(sc.head>=0&&heading==='참고'&&(!content.length||content.every(i=>REF_LINE.test(lines[i])&&!parseTodo(lines[i])))){for(let i=sc.head;i<sc.to;i++)kind[i]='ref';content.forEach(i=>refLines.push({line:i,text:lines[i].match(REF_LINE)[1].trim()}));continue;}
     if(items.length){
@@ -1910,7 +1914,7 @@ function splitBody(body){
       if(sc.head>=0){kind[sc.head]='cl';if(items.length===content.length)for(let i=sc.from;i<sc.to;i++)kind[i]='cl';}
     }else if(sc.head>=0&&!content.length){groups.push({heading,headLine:sc.head,items:[],empty:true});for(let i=sc.head;i<sc.to;i++)kind[i]='cl';}
   }
-  lines.forEach((ln,i)=>{if(kind[i]==='desc'&&IMG_LINE.test(ln))kind[i]='img';});
+  lines.forEach((ln,i)=>{if(!inFence[i]&&IMG_LINE.test(ln))kind[i]='img';});   // 어느 묶음 아래에 있든 이미지만 있는 줄은 첨부
   const desc=lines.filter((_,i)=>kind[i]==='desc').join('\n').replace(/\n{3,}/g,'\n\n').trim();
   return{groups,desc,lines,kind,linkLines,refLines};
 }
@@ -1939,7 +1943,7 @@ function mdInline(text,into){
 function mdToEdit(md,root){
   root.innerHTML='';const lines=String(md||'').split('\n');let ul=null;
   for(let i=0;i<lines.length;i++){const ln=lines[i];
-    if(/^```/.test(ln)){let j=i+1;while(j<lines.length&&!/^```/.test(lines[j]))j++;const raw=lines.slice(i,Math.min(j+1,lines.length)).join('\n');ul=null;
+    if(/^```/.test(ln)&&lines.slice(i+1).some(x=>/^```/.test(x))){let j=i+1;while(j<lines.length&&!/^```/.test(lines[j]))j++;const raw=lines.slice(i,Math.min(j+1,lines.length)).join('\n');ul=null;
       root.append(el('pre',{contenteditable:'false','data-md':raw},lines.slice(i+1,j).join('\n')));i=j;continue;}
     const h=ln.match(/^(#{1,6})\s+(.*)$/);const li=ln.match(/^\s*[-*]\s+(.*)$/);
     if(li&&!parseTodo(ln)){if(!ul){ul=el('ul',{});root.append(ul);}const x=el('li',{});mdInline(li[1],x);if(!x.childNodes.length)x.append(el('br'));ul.append(x);continue;}
