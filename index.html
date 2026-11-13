@@ -181,6 +181,14 @@ td input.inl{width:118px}
 .tdsec>button.hd small{color:var(--fg3);font-weight:400}
 .tdsec>button.hd .tri{color:var(--fg3);font-size:11px;width:10px}
 .tdchips{display:none}
+.fsels{display:none}
+@media (max-width:640px){.fsels{display:flex;gap:8px;padding:4px 0 2px}.fsel{flex:1;min-width:0;display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:0 4px 0 10px;background:var(--bg);height:38px}
+  .fsel>span{flex:0 0 auto;font-size:12px;color:var(--fg3)}.fsel select{flex:1;min-width:0;border:0;background:transparent;color:var(--fg);font:inherit;font-size:14px;height:36px;padding:0 2px;outline:none;text-overflow:ellipsis}
+  .fsel.on{border-color:var(--accent)}.fsel.on select{color:var(--accent);font-weight:600}}
+/* 가로로 미는 칩 줄: 스크롤 막대가 칩을 가리지 않게 감춘다 */
+.tdchips,.nchips .rowx,.projbar,.labelbar{scrollbar-width:none}.tdchips::-webkit-scrollbar,.nchips .rowx::-webkit-scrollbar,.projbar::-webkit-scrollbar,.labelbar::-webkit-scrollbar{display:none}
+/* 제목은 낱말 단위로 줄바꿈 (한글이 글자 중간에서 끊기지 않게) */
+td.t>button,.trow .tx,.tcard .tt,.gcard,.ctitle{word-break:keep-all;overflow-wrap:anywhere}
 .padd{max-width:820px;margin-bottom:12px}
 .phead{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}.phead .ptitle{font-size:19px;font-weight:700;text-align:left}.phead .ptitle:hover{color:var(--accent)}
 .pbarx{display:flex;gap:6px;align-items:center;overflow-x:auto;padding:2px 0 10px;margin-bottom:6px;border-bottom:1px solid var(--line)}
@@ -451,7 +459,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
   .sugl{display:none}
   .mmeta{display:block;font-size:12px;color:var(--fg3);margin-top:2px}.mmeta.late{color:var(--danger)}
   table{table-layout:fixed;width:100%}th.ck,td.ck{width:34px}td.t{overflow-wrap:anywhere}
-  table th:nth-last-child(-n+3):not(.hide-m),table td:nth-last-child(-n+3):not(.hide-m):not(.t){width:27%}
+  table th:nth-last-child(-n+3):not(.hide-m),table td:nth-last-child(-n+3):not(.hide-m):not(.t){width:23%}
   td select.inl,td .inl{max-width:100%}
   .bar .sp{display:none}
   .tdchips small{margin-left:4px}
@@ -963,6 +971,18 @@ function val(n,k){if(k==='title')return n.title;if(k==='project')return projectO
 
 /* ===================== 렌더 ===================== */
 /* 노트 보기의 옆 목록: 프로젝트별 · 라벨별. 누르면 그것만 보이고, 새 메모도 거기로 들어간다 */
+/* 폰: 프로젝트·라벨 고르기를 한 줄의 고르기 상자 둘로 보여 준다 (칩을 옆으로 밀 필요가 없다). rows = 칩 줄(.rowx) 들 */
+function chipSelects(chips){
+  const box=el('div',{class:'fsels'});
+  for(const row of chips.querySelectorAll('.rowx')){
+    const name=row.querySelector('span')?.textContent||'';const btns=[...row.querySelectorAll('button')];if(!btns.length)continue;
+    const sel=el('select',{'aria-label':name});let on=0;
+    btns.forEach((b,i)=>{const t=b.querySelector('span')?.textContent||'';const c=b.querySelector('small')?.textContent||'';sel.append(el('option',{value:String(i)},c?`${t} (${c})`:t));if(b.getAttribute('aria-pressed')==='true')on=i;});
+    sel.value=String(on);sel.onchange=()=>{const b=btns[+sel.value];if(b&&b.getAttribute('aria-pressed')!=='true')b.click();};
+    box.append(el('label',{class:'fsel'+(on?' on':'')},el('span',{},name),sel));
+  }
+  return box;
+}
 function noteSide(){
   const base=notes.filter(n=>typeOf(n)==='note'&&!isTask(n)&&!isArchived(n)&&!inEndedProject(n));const live=projectList();
   if(state.project&&state.project!=='__none'&&!base.some(n=>projectOf(n)===state.project)&&!live.includes(state.project))state.project='';   // 고른 프로젝트가 끝났으면 고르기를 푼다
@@ -979,7 +999,7 @@ function noteSide(){
   fill(side,(h,t)=>{h.append(el('h4',{},t));return h;});
   fill(chips,(h,t)=>{const r=el('div',{class:'rowx'},el('span',{},t));h.append(r);return r;});
   side.append(el('p',{class:'evnote',style:'margin:12px 0 0;line-height:1.5'},'프로젝트나 라벨을 누르면 그것만 보이고, 새 메모도 거기로 들어갑니다. 다시 누르면 풀립니다.'));
-  return{side,chips};
+  return{side,chips:chipSelects(chips)};
 }
 /* 프로젝트 탭·노트 보관함의 라벨 칩 줄: 누르면 그 라벨만 */
 function labelBar(base,get,set){
@@ -1488,7 +1508,7 @@ function renderTodo(m){
   fillSide(side,(h,t)=>{h.append(el('h4',{},t+'별'));return h;});
   fillSide(chipsM,(h,t)=>{const r=el('div',{class:'rowx'},el('span',{},t));h.append(r);return r;});
   side.append(el('p',{class:'evnote',style:'margin:12px 0 0;line-height:1.5'},'숫자는 완료 / 전체입니다. 프로젝트나 라벨을 누르면 그것만 보이고, 새 할 일도 거기로 들어갑니다.'));
-  main.prepend(chipsM);wrap.append(main,side);m.append(wrap);
+  main.prepend(chipSelects(chipsM));wrap.append(main,side);m.append(wrap);
 }
 /* ===================== 달력 ===================== */
 let calMonth=today().slice(0,7),calSel=today();

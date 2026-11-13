@@ -456,6 +456,13 @@ with sync_playwright() as p:
         m.fill('.tdadd input[type=text]','폰 엔터');m.press('.tdadd input[type=text]','Enter');idle(m);assert '20_Notes/폰 엔터.md' in files(m)
         assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'추가 뒤 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'10-mobile-todo.png'))
+        # 폰: 프로젝트·라벨은 한 줄의 고르기 상자 둘 (칩 줄 없음)
+        tab(m,'노트');assert m.locator('.fsels select').count()==2 and not m.is_visible('.tdchips') and not m.is_visible('.nside')
+        opt=[o for o in m.eval_on_selector_all('.fsels select >> nth=1 >> option','e=>e.map(x=>x.textContent)') if o.startswith('라벨 없음')][0]
+        n0=len(rows(m));m.select_option('.fsels select >> nth=1',label=opt);idle(m);assert m.evaluate('state.label')=='__none' and len(rows(m))<n0 and 'on' in m.get_attribute('.fsel >> nth=1','class')
+        m.select_option('.fsels select >> nth=1',index=0);idle(m);assert m.evaluate('state.label')=='' and len(rows(m))==n0
+        tab(m,'할 일');assert m.locator('.fsels select').count()>=1;m.select_option('.fsels select >> nth=0',index=1);idle(m);assert m.evaluate("todoFolder")!='*';m.select_option('.fsels select >> nth=0',index=0);idle(m);assert m.evaluate("todoFolder")=='*'
+        assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1')
         tab(m,'문서');m.click('.tree .tn:has-text("수납 아이디어")');idle(m);assert m.is_visible('#card .desc') and not m.is_visible('#pBody')
         assert m.inner_text('#card .pinbtn').strip()=='📌','폰에서는 핀 하나만'
         m.click('#card .desc');idle(m,200);m.keyboard.type('폰에서 쓴 설명');assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'설명 편집 중 가로 스크롤'
