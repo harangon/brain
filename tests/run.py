@@ -239,7 +239,7 @@ def t_project(pg):
     c=fget(pg,'90_Archive/집 정리.md');assert 'archived: true' in c and 'status: done' in c,c
     assert '90_Archive/비용 비교.md' in f and '20_Notes/업체 견적 받기.md' in f and 'project' not in fget(pg,'20_Notes/업체 견적 받기.md')
     assert 'project: "[[집 정리]]"' in fget(pg,'20_Notes/수납장 문서 요약.md');close(pg)
-    view(pg,'노트');open_row(pg,'수납장 문서 요약');assert '(보관됨)' in pg.inner_text('#card [data-chip=project]');close(pg)
+    view(pg,'노트');assert '수납장 문서 요약' not in rows(pg);pg.click('[data-sec=nended] .hd');idle(pg);pg.click('[data-sec=nended] .trow .tx:text-is("수납장 문서 요약")');idle(pg);assert '(보관됨)' in pg.inner_text('#card [data-chip=project]');close(pg);pg.click('[data-sec=nended] .hd');idle(pg)
 def t_project_restore(pg):
     # 미완료 할 일을 함께 보관한 프로젝트를 되살리면: 다시 진행 상태, 카드에서 '보관됨'이 사라지고, 그 할 일도 돌아온다
     n=pg.evaluate("createNote({type:'project',title:'임시 프로젝트',quiet:true}).then(()=>createNote({type:'todo',title:'임시 할 일',project:'임시 프로젝트'})).then(()=>1)");idle(pg)
@@ -357,6 +357,20 @@ def t_refs(pg):
     pg.click('#card .pinbtn');idle(pg);assert 'pin' not in fget(pg,P)
     act(pg,'할 일로');idle(pg);assert pg.locator('#card .pinbtn').count()==0;act(pg,'할 일 해제');idle(pg);close(pg)
 
+def t_ended(pg):
+    """끝난 프로젝트에 속한 노트는 노트 목록에서 빠지고, 되살리면 돌아온다"""
+    pg.evaluate("(async()=>{await createNote({type:'project',title:'끝낼 프로젝트',quiet:true});await createNote({type:'note',title:'끝낼 프로젝트의 메모',project:'끝낼 프로젝트'});})()");idle(pg,700)
+    tab(pg,'노트');view(pg,'노트');assert '끝낼 프로젝트의 메모' in rows(pg) and pg.locator('.nside button[data-v="끝낼 프로젝트"]').count()==1
+    pg.click('.nside button[data-v="끝낼 프로젝트"]');idle(pg);assert rows(pg)==['끝낼 프로젝트의 메모']
+    pg.evaluate("saveNote(projectNote('끝낼 프로젝트'),{status:'done',archived:true},undefined,undefined,true)");idle(pg,900);tab(pg,'프로젝트');tab(pg,'노트')
+    r=rows(pg);assert '끝낼 프로젝트의 메모' not in r and len(r)>1 and pg.locator('.nside button[data-v="끝낼 프로젝트"]').count()==0,r
+    assert 'archived' not in fget(pg,'20_Notes/끝낼 프로젝트의 메모.md'),'노트 파일은 그대로'
+    sec='[data-sec=nended]';assert '끝난 프로젝트의 노트' in pg.inner_text(sec);pg.click(sec+' .hd');idle(pg)
+    assert '끝낼 프로젝트의 메모' in pg.inner_text(sec) and '끝낼 프로젝트' in pg.inner_text(sec+' .trow .evnote')
+    pg.click(sec+' .trow .tx');idle(pg);assert pg.input_value('#card .ctitle')=='끝낼 프로젝트의 메모';close(pg)
+    pg.evaluate("unarchive(projectNote('끝낼 프로젝트'))");idle(pg,1200);tab(pg,'프로젝트');tab(pg,'노트')
+    assert '끝낼 프로젝트의 메모' in rows(pg) and (pg.locator(sec).count()==0 or '끝낼 프로젝트의 메모' not in pg.inner_text(sec))
+
 def t_settings(pg):
     pg.click('#btnSettings');idle(pg,200);tabs=pg.inner_text('#settings .mh');assert '저장한 보기' not in tabs and '뷰' not in pg.inner_text('#settings')
     pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
@@ -408,7 +422,7 @@ def t_unit(pg):
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
-TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_settings,t_offline,t_stale,t_edit,t_refs]
+TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_settings,t_offline,t_stale,t_edit,t_refs,t_ended]
 if os.environ.get('ONLY'):TESTS=[x for x in TESTS if x.__name__ in os.environ['ONLY'].split(',')]   # 일부만: ONLY=t_edit python3 tests/run.py
 with sync_playwright() as p:
     b=p.chromium.launch();pg0=None;pg=b.new_page(viewport={'width':1280,'height':860});errs=[]

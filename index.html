@@ -640,6 +640,8 @@ const targetFolder=n=>isArchived(n)?ARCHIVE_FOLDER:FOLDER_OF[typeOf(n)];
 const isTodoNote=n=>isTask(n)&&!isArchived(n);
 const isProjectNote=n=>typeOf(n)==='project';
 const projectNote=title=>notes.find(n=>isProjectNote(n)&&n.title===title);
+/* 끝났거나 보관된 프로젝트에 속한 노트 — 노트 탭 목록에서는 숨기고 아래 "끝난 프로젝트의 노트"에 모은다 */
+const inEndedProject=n=>{const t=projectOf(n);if(!t)return false;const pn=projectNote(t);return !!pn&&(isArchived(pn)||pn.fm.status==='done');};
 const projectList=()=>notes.filter(n=>isProjectNote(n)&&!isArchived(n)&&n.fm.status!=='done').map(n=>n.title).sort((a,b)=>a.localeCompare(b));
 const pjLink=t=>t?`[[${t}]]`:'';
 const projectOf=n=>{const ty=typeOf(n);if(ty==='project')return'';let v=n.fm.project;if(Array.isArray(v))v=v[0];v=String(v||'').replace(/^\[+|\]+$/g,'').split('|')[0].trim();return v==='ToDo'&&!projectNote('ToDo')?'':v;};
@@ -943,7 +945,7 @@ normState();
 function visible(){
   readControls();
   const{type:ty,project:pj,status:st,label:lb}=state,q=state.q.trim().toLowerCase();
-  let v=notes.filter(n=>(state.arch?isArchived(n):!isArchived(n))&&(!ty||typeOf(n)===ty)&&!(ty==='note'&&isTask(n))&&(!pj||(pj==='__none'?!projectOf(n):projectOf(n)===pj))
+  let v=notes.filter(n=>(state.arch?isArchived(n):!isArchived(n))&&(!ty||typeOf(n)===ty)&&!(ty==='note'&&isTask(n))&&!(ty==='note'&&!state.arch&&inEndedProject(n))&&(!pj||(pj==='__none'?!projectOf(n):projectOf(n)===pj))
     &&(!st||n.fm.status===st)&&(!lb||(lb==='__none'?!labelsOf(n).length:labelsOf(n).includes(lb)))
     &&(!q||(n.title+n.body+JSON.stringify(n.fm)).toLowerCase().includes(q)));
   const[k,d]=state.sort.split(':');const dir=+d||1;
@@ -962,7 +964,8 @@ function val(n,k){if(k==='title')return n.title;if(k==='project')return projectO
 /* ===================== 렌더 ===================== */
 /* 노트 보기의 옆 목록: 프로젝트별 · 라벨별. 누르면 그것만 보이고, 새 메모도 거기로 들어간다 */
 function noteSide(){
-  const base=notes.filter(n=>typeOf(n)==='note'&&!isTask(n)&&!isArchived(n));const live=projectList();
+  const base=notes.filter(n=>typeOf(n)==='note'&&!isTask(n)&&!isArchived(n)&&!inEndedProject(n));const live=projectList();
+  if(state.project&&state.project!=='__none'&&!base.some(n=>projectOf(n)===state.project)&&!live.includes(state.project))state.project='';   // 고른 프로젝트가 끝났으면 고르기를 푼다
   const pj=new Map([['',0]]);for(const t of live)pj.set(t,0);for(const n of base){const k=projectOf(n);if(k&&!pj.has(k))pj.set(k,0);pj.set(k,pj.get(k)+1);}
   const lb=new Map([['',0]]);for(const o of config.labels)lb.set(o.id,0);for(const n of base){const ls=labelsOf(n);if(!ls.length)lb.set('',lb.get('')+1);for(const l of ls)lb.set(l,(lb.get(l)||0)+1);}
   const side=el('aside',{class:'tdside nside'}),chips=el('div',{class:'tdchips nchips'});
@@ -1000,11 +1003,11 @@ function paintQuick(isNotes){
   const c=quickCtx();$('#quickText').placeholder=c.text?`메모 입력 — ${c.text}에 저장`:'메모 입력';
 }
 /* 접었다 펴는 보관 목록 (노트·프로젝트·할 일 탭이 같이 쓴다) */
-let noteArchOpen=false;
-function archSection(id,name,list,isOpen,toggle){
+let noteArchOpen=false,noteEndedOpen=false;
+function archSection(id,name,list,isOpen,toggle,hint='열어서 되살릴 수 있습니다',meta=n=>String(val(n,'updated'))){
   const sec=el('section',{class:'tdsec','data-sec':id,style:'margin-top:18px;max-width:820px'});
-  sec.append(el('button',{class:'hd','aria-expanded':String(isOpen),onclick:toggle},el('span',{class:'tri'},isOpen?'▾':'▸'),name,el('small',{},String(list.length)+' · 열어서 되살릴 수 있습니다')));
-  if(isOpen)for(const n of list.slice(0,200))sec.append(el('div',{class:'trow'},el('button',{class:'tx',style:'text-align:left',onclick:()=>openNote(n)},n.title),el('span',{class:'evnote'},String(val(n,'updated')))));
+  sec.append(el('button',{class:'hd','aria-expanded':String(isOpen),onclick:toggle},el('span',{class:'tri'},isOpen?'▾':'▸'),name,el('small',{},String(list.length)+' · '+hint)));
+  if(isOpen)for(const n of list.slice(0,200))sec.append(el('div',{class:'trow'},el('button',{class:'tx',style:'text-align:left',onclick:()=>openNote(n)},n.title),el('span',{class:'evnote'},meta(n))));
   return sec;
 }
 function render(){
@@ -1031,6 +1034,8 @@ function render(){
   else ({table:renderTable,board:renderBoard,gallery:renderGallery})[state.view](v,box);
   // 보관한 노트
   const q=state.q.trim().toLowerCase();const av=notes.filter(n=>typeOf(n)==='note'&&!isTask(n)&&isArchived(n)&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>val(b,'updated')<val(a,'updated')?-1:1);
+  const ev=notes.filter(n=>typeOf(n)==='note'&&!isTask(n)&&!isArchived(n)&&inEndedProject(n)&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>projectOf(a).localeCompare(projectOf(b))||(val(b,'updated')<val(a,'updated')?-1:1));
+  if(ev.length)box.append(archSection('nended','끝난 프로젝트의 노트',ev,noteEndedOpen,()=>{noteEndedOpen=!noteEndedOpen;render();},'프로젝트를 되살리면 다시 목록에 나옵니다',n=>projectOf(n)));
   if(av.length)box.append(archSection('narch','보관한 노트',av,noteArchOpen,()=>{noteArchOpen=!noteArchOpen;render();}));
 }
 /* 일괄 선택 */
@@ -1737,7 +1742,7 @@ async function convert(n,to){
 }
 async function finishProject(n){
   const tl=todosOf(n.title),openL=tl.filter(t=>t.fm.status!=='done'),doneN=tl.length-openL.length,nl=notesOf(n.title);
-  const msg=`"${n.title}"을(를) 완료로 바꾸고 보관합니다.`+(doneN?` 완료된 할 일 ${doneN}개도 함께 보관합니다.`:'')+(nl.length?` 노트 ${nl.length}개는 그대로 두고, 프로젝트만 보관된 것으로 표시됩니다.`:'');
+  const msg=`"${n.title}"을(를) 완료로 바꾸고 보관합니다.`+(doneN?` 완료된 할 일 ${doneN}개도 함께 보관합니다.`:'')+(nl.length?` 노트 ${nl.length}개는 노트 목록에서 빠져 "끝난 프로젝트의 노트"에 모입니다.`:'');
   let how='free';
   if(openL.length){how=await ask('프로젝트 끝내기',{msg:msg+` 남은 할 일 ${openL.length}개는 어떻게 할까요?`,options:[{value:'free',label:'프로젝트 없음으로 돌리기'},{value:'archive',label:'함께 보관'}],ok:'끝내기'});if(!how)return;}
   else if(!await okAsk('프로젝트 끝내기',msg,'끝내기'))return;
