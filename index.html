@@ -183,10 +183,11 @@ td input.inl{width:118px}
 .tdchips{display:none}
 .trow .tx .rp{font-size:12px;color:var(--fg3);margin-left:8px;white-space:nowrap}
 .chip.rchip{position:relative;cursor:pointer}.chip.rchip select{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:16px}.chip.rchip:not(.set){color:var(--fg3)}
-.fsels{display:none}
-@media (max-width:640px){.fsels{display:flex;gap:8px;padding:4px 0 2px}.fsel{flex:1;min-width:0;display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:0 4px 0 10px;background:var(--bg);height:38px}
-  .fsel>span{flex:0 0 auto;font-size:12px;color:var(--fg3)}.fsel select{flex:1;min-width:0;border:0;background:transparent;color:var(--fg);font:inherit;font-size:14px;height:36px;padding:0 2px;outline:none;text-overflow:ellipsis}
-  .fsel.on{border-color:var(--accent)}.fsel.on select{color:var(--accent);font-weight:600}}
+.fsels{display:none;gap:8px;padding:4px 0 2px}.nmain>.fsels{display:flex;max-width:560px;padding:2px 0 8px}
+.fsel{flex:1;min-width:0;display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:0 4px 0 10px;background:var(--bg);height:36px}
+.fsel>span{flex:0 0 auto;font-size:12px;color:var(--fg3)}.fsel select{flex:1;min-width:0;border:0;background:transparent;color:var(--fg);font:inherit;font-size:14px;height:34px;padding:0 2px;outline:none;text-overflow:ellipsis;cursor:pointer}
+.fsel.on{border-color:var(--accent)}.fsel.on select{color:var(--accent);font-weight:600}
+@media (max-width:640px){.fsels{display:flex}.nmain>.fsels{max-width:none;padding:4px 0 2px}.fsel{height:38px}.fsel select{height:36px}}
 /* 가로로 미는 칩 줄: 스크롤 막대가 칩을 가리지 않게 감춘다 */
 .tdchips,.nchips .rowx,.projbar,.labelbar{scrollbar-width:none}.tdchips::-webkit-scrollbar,.nchips .rowx::-webkit-scrollbar,.projbar::-webkit-scrollbar,.labelbar::-webkit-scrollbar{display:none}
 /* 제목은 낱말 단위로 줄바꿈 (한글이 글자 중간에서 끊기지 않게) */
@@ -1002,8 +1003,8 @@ function chipSelects(chips){
   const box=el('div',{class:'fsels'});
   for(const row of chips.querySelectorAll('.rowx')){
     const name=row.querySelector('span')?.textContent||'';const btns=[...row.querySelectorAll('button')];if(!btns.length)continue;
-    const sel=el('select',{'aria-label':name});let on=0;
-    btns.forEach((b,i)=>{const t=b.querySelector('span')?.textContent||'';const c=b.querySelector('small')?.textContent||'';sel.append(el('option',{value:String(i)},c?`${t} (${c})`:t));if(b.getAttribute('aria-pressed')==='true')on=i;});
+    const sel=el('select',{'aria-label':name,'data-k':btns[0].dataset.k||('key' in btns[0].dataset?'project':'label')});let on=0;
+    btns.forEach((b,i)=>{const t=b.querySelector('span')?.textContent||'';const c=b.querySelector('small')?.textContent||'';sel.append(el('option',{value:String(i),'data-v':b.dataset.v??b.dataset.key??b.dataset.label??''},c?`${t} (${c})`:t));if(b.getAttribute('aria-pressed')==='true')on=i;});
     sel.value=String(on);sel.onchange=()=>{const b=btns[+sel.value];if(b&&b.getAttribute('aria-pressed')!=='true')b.click();};
     box.append(el('label',{class:'fsel'+(on?' on':'')},el('span',{},name),sel));
   }
@@ -1075,7 +1076,7 @@ function render(){
   if(!notes.length){m.append(el('div',{class:'status'},loadError?`노트를 불러오지 못했습니다: ${loadError}`:'노트가 없습니다. 위 입력창에 첫 메모를 적어 보세요.'));return;}
   const v=visible();
   let box=m;
-  if(state.saved==='b:all'){const{side,chips}=noteSide();box=el('div',{class:'nmain'});box.append(chips);m.append(el('div',{class:'tdwrap'},box,side));}   // 노트 보기: 옆에 프로젝트·라벨 목록
+  if(state.saved==='b:all'){const{side,chips}=noteSide();box=el('div',{class:'nmain'});box.append(chips);m.append(el('div',{class:'tdwrap'},box));}   // 노트 보기: 위에 프로젝트·라벨 고르기 상자 (PC·폰 같은 모양)
   if(!v.length)box.append(el('div',{class:'status'},state.q?'검색에 맞는 노트가 없습니다.':(state.project||state.label)?'여기에 해당하는 노트가 없습니다.':'노트가 없습니다. 위 입력창에 메모를 적어 보세요.'));
   else ({table:renderTable,board:renderBoard,gallery:renderGallery})[state.view](v,box);
   // 보관한 노트

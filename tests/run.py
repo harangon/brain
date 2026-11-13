@@ -27,7 +27,9 @@ def tab(pg,name):
         if pg.get_attribute('#btnDocs','aria-pressed')!='true':pg.click('#btnDocs')
     else:pg.click(f'.tabs:not(.sub) button:text-is("{name}")')
     idle(pg)
-def side(pg,k,v):pg.click(f'.nside button[data-k="{k}"][data-v="{v}"]');idle(pg)
+def side(pg,k,v):   # 노트 탭의 프로젝트·라벨 고르기 상자. 이미 고른 것을 다시 고르면 풀린다(전체)
+    pg.evaluate("""([k,v])=>{const s=document.querySelector(`.nmain .fsels select[data-k="${k}"]`);const os=[...s.options];let o=os.find(o=>o.dataset.v===v);if(o.selected&&v!=='')o=os[0];s.value=o.value;s.dispatchEvent(new Event('change'));}""",[k,v]);idle(pg)
+def side_on(pg,k):return pg.evaluate("""k=>{const s=document.querySelector(`.nmain .fsels select[data-k="${k}"]`);return s.selectedOptions[0].dataset.v}""",k)
 def rows(pg):return pg.eval_on_selector_all('#main tbody tr td.t>button:first-child','e=>e.map(x=>x.textContent)')
 def open_row(pg,title):pg.click(f'#main td.t>button:first-child:text-is("{title}")');idle(pg)
 def close(pg):pg.click('#pClose');idle(pg,200)
@@ -47,7 +49,7 @@ def t_load(pg):
     # 노트 탭에는 할 일이 아닌 노트만 (할 일은 할 일 탭)
     assert set(r)-set(daily)=={'수납 아이디어','구조를 단순하게 가는 이유','주말에 볼 영상','옛 메모','수납장 문서 요약','정리는 버리는 것부터','테마 비교 메모','옛 자료'},r
     assert pg.inner_text('.tabs:not(.sub)').split()==['노트','프로젝트','할','일','일정'] and '카드' not in pg.inner_text('body')
-    assert not pg.is_visible('#views') and pg.locator('.nside').count()==1 and '정리 전' not in pg.inner_text('body') and '이대로 두기' not in pg.inner_text('body')
+    assert not pg.is_visible('#views') and pg.locator('.nmain .fsels select').count()==2 and pg.locator('.nside').count()==0 and '정리 전' not in pg.inner_text('body') and '이대로 두기' not in pg.inner_text('body')
     assert pg.get_attribute('#quickText','placeholder')=='메모 입력'
     shot(pg,'01-notes')
 def t_suggest(pg):
@@ -63,10 +65,10 @@ def t_quick(pg):
     assert any(p.startswith('20_Notes/새 메모 테스트 20') for p in files(pg)),'이름이 겹치면 날짜를 붙여야 함'
 def t_views(pg):
     view(pg,'노트');r=rows(pg);assert '수납장 문서 요약' in r and '집 정리' not in r and '우유 사기' not in r,r
-    st=pg.inner_text('.nside');assert '프로젝트 없음' in st and '집 정리' in st and '블로그 개편' in st and '라벨 없음' in st and '읽을 것' in st and '내 생각' in st,st
+    st=pg.text_content('.nmain .fsels');assert '프로젝트 없음' in st and '집 정리' in st and '블로그 개편' in st and '라벨 없음' in st and '읽을 것' in st and '내 생각' in st,st
     # 옆 목록에서 프로젝트를 누르면 그 프로젝트의 노트만. 보기 칩은 그대로
     side(pg,'project','집 정리');assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어'},rows(pg)
-    assert pg.get_attribute('.nside button[data-v="집 정리"]','aria-pressed')=='true'
+    assert side_on(pg,'project')=='집 정리' and 'on' in pg.get_attribute('.nmain .fsel >> nth=0','class')
     # 메모는 보고 있는 프로젝트·라벨로 들어간다
     assert '집 정리에 저장' in pg.get_attribute('#quickText','placeholder')
     pg.fill('#quickText','선반 치수');pg.press('#quickText','Enter');idle(pg);c=fget(pg,'20_Notes/선반 치수.md');assert c and 'project: "[[집 정리]]"' in c,c
@@ -77,7 +79,7 @@ def t_views(pg):
     side(pg,'project','집 정리');assert set(rows(pg))=={'수납장 문서 요약','수납 아이디어','선반 치수','선반 자료'},rows(pg)
     side(pg,'project','__none');side(pg,'label','__none');r=rows(pg);assert '주말에 볼 영상' in r and '정리는 버리는 것부터' not in r and '선반 치수' not in r,r
     side(pg,'project','');side(pg,'label','read');assert set(rows(pg))=={'수납장 문서 요약','옛 자료'},rows(pg)
-    side(pg,'label','idea');assert rows(pg)==[] and '해당하는 노트가 없습니다' in pg.inner_text('#main') and pg.locator('.nside').count()==1
+    side(pg,'label','idea');assert rows(pg)==[] and '해당하는 노트가 없습니다' in pg.inner_text('#main') and pg.locator('.nmain .fsels').count()==1
     side(pg,'label','');assert '종류' not in pg.inner_text('#main thead')
     # 프로젝트 탭 홈: 프로젝트(보드) 고르기
     proj_home(pg);assert not pg.is_visible('#quick') and not pg.is_visible('#subtabs')
@@ -264,7 +266,7 @@ def t_misc(pg):
     # 문서는 탭이 아니라 오른쪽 아이콘. 다시 누르면 보던 탭으로. 새로고침 버튼은 없다
     assert pg.locator('.tabs:not(.sub) button').count()==4 and pg.locator('#btnReload').count()==0 and pg.eval_on_selector_all('header .icon','e=>e.map(x=>x.id)')[:2]==['btnDocs','btnPalette']
     pg.click('#btnDocs');idle(pg);assert pg.is_visible('.tree') and pg.get_attribute('#btnDocs','aria-pressed')=='true';pg.click('#btnDocs');idle(pg);assert pg.locator('.calgrid .day').count()==42 and pg.get_attribute('#btnDocs','aria-pressed')=='false'
-    tab(pg,'문서');assert not pg.is_visible('#quick') and pg.locator('.nside').count()==0,'문서 탭에는 메모 입력·옆 목록이 없어야 함'
+    tab(pg,'문서');assert not pg.is_visible('#quick') and pg.locator('.fsels').count()==0,'문서 탭에는 메모 입력·고르기 상자가 없어야 함'
     tree=pg.inner_text('.tree');assert 'Notes' in tree and 'Projects' in tree and 'Todos' not in tree and 'Cards' not in tree and 'Inbox' not in tree,tree
     pg.click('.tree .tn:has-text("수납 아이디어")');idle(pg);assert pg.input_value('#card .ctitle')=='수납 아이디어' and pg.inner_text('#pPath')=='20_Notes/수납 아이디어.md'
     # 문서 탭도 같은 노트 화면이다 — 마크다운 편집기는 없다
@@ -360,10 +362,10 @@ def t_refs(pg):
 def t_ended(pg):
     """끝난 프로젝트에 속한 노트는 노트 목록에서 빠지고, 되살리면 돌아온다"""
     pg.evaluate("(async()=>{await createNote({type:'project',title:'끝낼 프로젝트',quiet:true});await createNote({type:'note',title:'끝낼 프로젝트의 메모',project:'끝낼 프로젝트'});})()");idle(pg,700)
-    tab(pg,'노트');view(pg,'노트');assert '끝낼 프로젝트의 메모' in rows(pg) and pg.locator('.nside button[data-v="끝낼 프로젝트"]').count()==1
-    pg.click('.nside button[data-v="끝낼 프로젝트"]');idle(pg);assert rows(pg)==['끝낼 프로젝트의 메모']
+    tab(pg,'노트');view(pg,'노트');assert '끝낼 프로젝트의 메모' in rows(pg) and pg.locator('.nmain .fsels option[data-v="끝낼 프로젝트"]').count()==1
+    side(pg,'project','끝낼 프로젝트');assert rows(pg)==['끝낼 프로젝트의 메모']
     pg.evaluate("saveNote(projectNote('끝낼 프로젝트'),{status:'done',archived:true},undefined,undefined,true)");idle(pg,900);tab(pg,'프로젝트');tab(pg,'노트')
-    r=rows(pg);assert '끝낼 프로젝트의 메모' not in r and len(r)>1 and pg.locator('.nside button[data-v="끝낼 프로젝트"]').count()==0,r
+    r=rows(pg);assert '끝낼 프로젝트의 메모' not in r and len(r)>1 and pg.locator('.nmain .fsels option[data-v="끝낼 프로젝트"]').count()==0,r
     assert 'archived' not in fget(pg,'20_Notes/끝낼 프로젝트의 메모.md'),'노트 파일은 그대로'
     sec='[data-sec=nended]';assert '끝난 프로젝트의 노트' in pg.inner_text(sec);pg.click(sec+' .hd');idle(pg)
     assert '끝낼 프로젝트의 메모' in pg.inner_text(sec) and '끝낼 프로젝트' in pg.inner_text(sec+' .trow .evnote')
