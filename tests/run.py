@@ -271,7 +271,7 @@ def t_misc(pg):
     assert pg.locator('.tabs:not(.sub) button').count()==4 and pg.locator('#btnReload').count()==0 and pg.eval_on_selector_all('header .icon','e=>e.map(x=>x.id)')[:2]==['btnDocs','btnPalette']
     pg.click('#btnDocs');idle(pg);assert pg.is_visible('.tree') and pg.get_attribute('#btnDocs','aria-pressed')=='true';pg.click('#btnDocs');idle(pg);assert pg.locator('.calgrid .day').count()==42 and pg.get_attribute('#btnDocs','aria-pressed')=='false'
     tab(pg,'문서');assert not pg.is_visible('#quick') and pg.locator('.fsels').count()==0,'문서 탭에는 메모 입력·고르기 상자가 없어야 함'
-    tree=pg.inner_text('.tree');assert 'Notes' in tree and 'Projects' in tree and 'Todos' not in tree and 'Cards' not in tree and 'Inbox' not in tree,tree
+    tree=pg.inner_text('.tree');assert '노트 · 할 일' in tree and '프로젝트' in tree and 'Notes' not in tree and 'Todos' not in tree and 'Cards' not in tree and 'Inbox' not in tree,tree
     pg.click('.tree .tn:has-text("수납 아이디어")');idle(pg);assert pg.input_value('#card .ctitle')=='수납 아이디어' and pg.inner_text('#pPath')=='20_Notes/수납 아이디어.md'
     # 문서 탭도 같은 노트 화면이다 — 마크다운 편집기는 없다
     assert not pg.is_visible('#pBody') and not pg.is_visible('#pSave') and pg.is_visible('#card .desc')
@@ -575,6 +575,11 @@ with sync_playwright() as p:
         m.click('#card .desc');idle(m,200);m.keyboard.type('폰에서 쓴 설명');assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'설명 편집 중 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'11-mobile-edit.png'))
         m.click('#card .dedit button:text-is("저장")');idle(m);assert '폰에서 쓴 설명' in fget(m,'20_Notes/수납 아이디어.md')
+        # 폰(터치)에서는 체크리스트·참고의 ✕ 가 늘 보여야 지울 수 있다
+        m.fill('#card [data-sec=refs] .add input','폰에서 넣은 참고');m.press('#card [data-sec=refs] .add input','Enter');idle(m)
+        op=m.eval_on_selector('#card [data-sec=refs] .ci.ref .x','e=>+getComputedStyle(e).opacity');assert op>0.3,op
+        m.click('#card [data-sec=refs] .ci.ref .x');idle(m);assert '폰에서 넣은 참고' not in fget(m,'20_Notes/수납 아이디어.md')
+        assert '넓게' not in m.inner_text('#card .actions')
         results.append(('mobile','ok',''))
     except Exception as e:results.append(('mobile','FAIL',str(e)[:300]))
     b.close()

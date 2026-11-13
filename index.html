@@ -308,7 +308,8 @@ td.t>button,.trow .tx,.tcard .tt,.gcard,.ctitle{word-break:keep-all;overflow-wra
 .card-v .ci.done span.t{color:var(--fg3);text-decoration:line-through}
 .card-v .ci .t{flex:1}
 .card-v .ci .due{font-size:11.5px;color:var(--fg2);white-space:nowrap;padding-top:2px}
-.card-v .ci .x{opacity:0;font-size:12px}.card-v .ci:hover .x{opacity:.6}
+.card-v .ci .x{opacity:0;font-size:12px}.card-v .ci:hover .x,.card-v .ci .x:focus-visible{opacity:.6}
+@media (hover:none),(max-width:640px){.card-v .ci .x{opacity:.45}}
 .card-v .cl .add{display:flex;gap:6px;align-items:center}.card-v .cl .add .btn{margin-top:4px;flex:0 0 auto}
 .card-v .cl .add input{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg2);font-size:13px;margin-top:4px}
 .card-v .att{display:flex;gap:8px;flex-wrap:wrap}
@@ -413,6 +414,7 @@ td.ck input,th.ck input{width:15px;height:15px;cursor:pointer;vertical-align:mid
 .day.today{background:color-mix(in srgb,var(--accent) 10%,var(--bg));box-shadow:inset 0 0 0 2px var(--accent)}
 .day.today .dn{background:var(--accent);color:#fff;border-radius:10px;padding:0 7px;font-weight:600}
 .day.today .dn::after{content:' 오늘';font-size:10px;font-weight:500}
+@media (max-width:640px){.day.today .dn::after{content:none}}
 .day.sel.today{outline-color:var(--fg)}
 .day.dropover{background:var(--bg3)}
 .day .it.ev{cursor:grab}
@@ -1613,7 +1615,7 @@ function renderDocs(m){
   const wrap=el('div',{class:'docs'});const tree=el('div',{class:'tree'});
   for(const f of FOLDERS){const list=notes.filter(n=>n.folder===f&&(!q||n.title.toLowerCase().includes(q))).sort((a,b)=>a.title.localeCompare(b.title));
     if(!list.length&&(q||LEGACY_FOLDERS.includes(f)))continue;
-    const h=el('h4',{},f.replace(/^\d+_/,'')+(list.length?` ${list.length}`:''));
+    const h=el('h4',{title:f},({'10_Projects':'프로젝트','20_Notes':'노트 · 할 일','90_Archive':'보관'}[f]||f.replace(/^\d+_/,''))+(list.length?` ${list.length}`:''));
     const mkType={'10_Projects':'project','20_Notes':'note'}[f];if(mkType)h.append(el('button',{title:'새 '+TYPE_NAME[mkType],onclick:()=>newNote(mkType)},'+'));
     tree.append(h);
     for(const n of list){const sub=n.path.split('/').slice(1,-1).join('/');tree.append(el('button',{class:'tn','aria-current':current===n?'true':'false',onclick:()=>{openNote(n);wrap.classList.add('m-edit');}},sub?el('small',{style:'color:var(--fg3);margin-right:4px'},sub+'/'):'',n.title));}}
@@ -1823,7 +1825,8 @@ async function finishProject(n){
 /* 이 노트로 할 수 있는 동작 (카드 아래 줄과 ⋯ 메뉴가 같이 쓴다) */
 function noteActions(n){
   const ty=typeOf(n),a=[];
-  a.push([$('#panel').classList.contains('wide')?'좁게':'넓게',()=>$('#panel').classList.toggle('wide')],['복제',()=>duplicateNote(n)]);
+  if(innerWidth>640)a.push([$('#panel').classList.contains('wide')?'좁게':'넓게',()=>$('#panel').classList.toggle('wide')]);
+  a.push(['복제',()=>duplicateNote(n)]);
   if(isArchived(n))a.push(['되살리기',()=>unarchive(n),'pri']);
   else{
     if(ty==='note')a.push(isTask(n)?['할 일 해제',()=>convert(n,'note')]:['할 일로',()=>convert(n,'todo'),'pri'],['프로젝트로 키우기',()=>convert(n,'project')]);
