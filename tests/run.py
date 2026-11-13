@@ -457,6 +457,7 @@ with sync_playwright() as p:
         assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'추가 뒤 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'10-mobile-todo.png'))
         tab(m,'문서');m.click('.tree .tn:has-text("수납 아이디어")');idle(m);assert m.is_visible('#card .desc') and not m.is_visible('#pBody')
+        assert m.inner_text('#card .pinbtn').strip()=='📌','폰에서는 핀 하나만'
         m.click('#card .desc');idle(m,200);m.keyboard.type('폰에서 쓴 설명');assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'설명 편집 중 가로 스크롤'
         if SHOTS:m.screenshot(path=os.path.join(SHOTS,'11-mobile-edit.png'))
         m.click('#card .dedit button:text-is("저장")');idle(m);assert '폰에서 쓴 설명' in fget(m,'20_Notes/수납 아이디어.md')

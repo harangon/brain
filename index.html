@@ -269,7 +269,7 @@ td input.inl{width:118px}
 .card-v a.xl,.todo a.xl{color:var(--accent);text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere}
 .card-v .ci.ref{align-items:flex-start}.card-v .ci.ref .ri{flex:0 0 18px;text-align:center;color:var(--fg3)}.card-v .ci.ref .t{flex:1;min-width:0;overflow-wrap:anywhere}.card-v .ci.ref small{display:block;font-size:12px;color:var(--fg3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card-v .pinbtn{flex:0 0 auto;color:var(--fg3)}.card-v .pinbtn.on{border-color:var(--accent);color:var(--accent)}
-@media (max-width:640px){.card-v .pinbtn{font-size:0;padding:5px 8px}.card-v .pinbtn::before{content:'📌';font-size:13px}.card-v .pinbtn:not(.on)::before{opacity:.45}}
+@media (max-width:640px){.card-v .pinbtn{padding:5px 8px}.card-v .pinbtn .lb{display:none}.card-v .pinbtn:not(.on){opacity:.5}}
 .card-v .desc.editing{border-color:var(--accent);background:var(--bg);cursor:text;min-height:140px;outline:none;white-space:pre-wrap;overflow-wrap:anywhere}
 .card-v .desc.editing p{margin:0}.card-v .desc.editing>:first-child{margin-top:0}.card-v .desc.editing ul{margin:.2em 0;padding-left:1.3em}.card-v .desc.editing pre{background:var(--bg2);border-radius:6px;padding:8px;font-size:12.5px;overflow:auto}
 .card-v .desc.editing a.wl,.card-v .desc.editing .rawmd{background:var(--bg2);border:1px solid var(--line);border-radius:6px;padding:0 5px;text-decoration:none;color:var(--accent);white-space:nowrap}
@@ -1920,7 +1920,7 @@ function renderCard(n){
   const ti=el('input',{class:'ctitle',value:n.title,'aria-label':'제목',enterkeyhint:'done',onkeydown:e=>{if(e.key==='Enter'){e.preventDefault();ti.blur();}},onblur:async()=>{const t=ti.value.trim();if(t&&t!==n.title){if(ty==='project'&&projectNote(t)){toast('같은 이름의 프로젝트가 있습니다');ti.value=n.title;return;}await saveNote(n,{},t,undefined,true);}else ti.value=n.title;}});
   const tf=el('form',{style:'display:contents',onsubmit:e=>{e.preventDefault();ti.blur();}},ti);   // 폰 키보드의 완료 키 → 저장
   if(isTask(n))box.append(el('div',{class:'ctrow'},el('input',{type:'checkbox',class:'cdone',checked:n.fm.status==='done'?'':null,'aria-label':'완료',title:'완료',onchange:e=>saveNote(n,{status:e.target.checked?'done':''},undefined,undefined,true)}),tf));
-  else if(ty==='note'&&!arch){const on=isPinned(n);box.append(el('div',{class:'ctrow'},tf,el('button',{class:'btn sm pinbtn'+(on?' on':''),'aria-pressed':String(on),title:on?'고정을 풉니다':'노트 목록 맨 위에 고정합니다',onclick:()=>saveNote(n,{pin:on?'':true},undefined,undefined,true)},on?'📌 고정됨':'📌 고정')));}
+  else if(ty==='note'&&!arch){const on=isPinned(n);box.append(el('div',{class:'ctrow'},tf,el('button',{class:'btn sm pinbtn'+(on?' on':''),'aria-pressed':String(on),title:on?'고정을 풉니다':'노트 목록 맨 위에 고정합니다',onclick:()=>saveNote(n,{pin:on?'':true},undefined,undefined,true)},'📌',el('span',{class:'lb'},on?' 고정됨':' 고정'))));}
   else box.append(tf);
   // 칩 줄: 종류에 따라 — 프로젝트는 상태·마감·라벨, 할 일은 프로젝트·마감·라벨, 노트는 프로젝트·라벨
   const chips=el('div',{class:'chiprow'});
