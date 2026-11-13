@@ -2,7 +2,7 @@
 const __T=today(),__D=n=>addDays(__T,n);
 const __fm=(o,body)=>'---\n'+Object.entries(o).map(([k,v])=>`${k}: ${v}`).join('\n')+'\n---\n'+body;
 const __FILES={
-  '_templates/Project.md':'---\ntype: project\nstatus: active\ncreated: <% tp.date.now("YYYY-MM-DD") %>\nupdated: <% tp.date.now("YYYY-MM-DD") %>\n---\n# <% tp.file.title %>\n\n## 목표\n',
+  '_templates/Project.md':'---\ntype: project\nstatus: active\ncreated: <% tp.date.now("YYYY-MM-DD") %>\nupdated: <% tp.date.now("YYYY-MM-DD") %>\n---\n# <% tp.file.title %>\n',
   ['01_Daily/'+__T+'.md']:__fm({type:'daily',created:__T},`# ${__T}\n\n## 메모\n`),
   '10_Projects/집 정리.md':__fm({type:'project',status:'active',created:__D(-9),updated:__D(-1),due:__D(10)},'# 집 정리\n\n창고와 베란다를 비운다.\n'),
   '10_Projects/블로그 개편.md':__fm({type:'project',status:'paused',label:'work',created:__D(-20),updated:__D(-5)},'# 블로그 개편\n\n보류 중\n'),

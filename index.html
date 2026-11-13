@@ -775,7 +775,7 @@ async function newEvent(ds){
   const cals=(cfg.gcal.cals||[]).map(id=>({value:id,label:cfg.gcal.names?.[id]||id}));
   const r=await ask('새 일정',{ok:'만들기',fields:[
     {id:'title',label:'제목',placeholder:'회의'},{id:'date',label:'날짜',type:'date',value:ds},
-    {id:'time',label:'시작',type:'time',value:''},
+    {id:'time',label:'시작',type:'time',value:(()=>{if(ds!==today())return'09:00';const h=new Date().getHours()+1;return h>23?'':String(h).padStart(2,'0')+':00';})()},   // 기본: 오늘이면 다음 정각, 다른 날이면 9시 (길이 기본값 1시간과 맞춘다)
     {id:'minutes',label:'길이',options:[{value:'30',label:'30분'},{value:'60',label:'1시간'},{value:'90',label:'1시간 30분'},{value:'120',label:'2시간'},{value:'180',label:'3시간'},{value:'0',label:'종일'}],value:'60'},
     ...(cals.length>1?[{id:'cal',label:'캘린더',options:cals,value:cals[0].value}]:[])]});
   if(!r)return;const title=(r.title||'').trim();if(!title){toast('제목이 필요합니다');return;}
@@ -1249,7 +1249,7 @@ async function listMenu(p,name,anchor){
 async function newProject(){
   const t=(await ask('새 프로젝트',{placeholder:'프로젝트 이름',ok:'만들기'})||'').trim();if(!t)return;
   if(projectNote(t)){toast('같은 이름의 프로젝트가 있습니다');return;}
-  const n=await createNote({type:'project',title:t,tpl:'Project',quiet:true});if(n)selectProject(n.title);
+  const n=await createNote({type:'project',title:t,quiet:true});if(n)selectProject(n.title);   // 새 프로젝트는 빈 설명으로 시작한다 (틀에 박힌 글을 넣지 않는다)
 }
 function projBar(all,cur){
   const bar=el('div',{class:'pbarx',role:'tablist','aria-label':'프로젝트'});
@@ -1878,10 +1878,10 @@ async function newNote(type,project=''){
   const title=(await ask({note:'새 노트',todo:'새 할 일',project:'새 프로젝트'}[type],{placeholder:type==='todo'?'할 일 내용 (금요일 보고서처럼 날짜도 됩니다)':'제목',msg:project?`프로젝트: ${project}`:''})||'').trim();if(!title)return null;
   if(type==='todo'){const w=parseWhen(title);await addTodoNote(w&&w.rest?w.rest:title,w&&w.rest?w.due:null,false,project);return null;}
   if(type==='project'&&projectNote(title)){toast('같은 이름의 프로젝트가 있습니다');return null;}
-  const n=await createNote({type,title,project,tpl:type==='project'?'Project':null});if(n)openNote(n);return n;
+  const n=await createNote({type,title,project});if(n)openNote(n);return n;
 }
 async function addTodoOn(ds){
-  const text=(await ask(`${ds} 할 일`,{placeholder:'할 일 내용'})||'').trim();if(!text)return;
+  const text=(await ask(`${fmtDue(ds)} 할 일`,{placeholder:'할 일 내용'})||'').trim();if(!text)return;
   await addTodoNote(text,ds);
 }
 

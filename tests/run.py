@@ -260,6 +260,8 @@ def t_delete_project(pg):
     proj_card(pg,'블로그 새단장');pg.click('#card .actions .danger');assert '프로젝트 없음' in pg.inner_text('#askMsg');ok(pg);idle(pg,600)
     assert '10_Projects/블로그 새단장.md' not in files(pg) and 'project' not in fget(pg,'20_Notes/도메인 연장.md')
     proj(pg,'집 정리') if False else tab(pg,'프로젝트');pg.click('#projNew');pg.fill('#askField input','새 프로젝트');ok(pg);idle(pg,400);c=fget(pg,'10_Projects/새 프로젝트.md');assert c and 'type: project' in c and 'status: active' in c,c
+    assert c.split('---')[2].strip()=='# 새 프로젝트','새 프로젝트는 빈 설명으로 시작한다: '+c
+    pg.click('.phead .ptitle');idle(pg);assert pg.inner_text('#card .desc').strip()=='설명 추가…' and pg.locator('#card .cl .ci').count()==0 and '없습니다' in pg.inner_text('#card');close(pg)
     assert pg.inner_text('.phead .ptitle')=='새 프로젝트' and lists(pg)==['할 일','진행 중','완료'] and col(pg,'할 일')==[]
 def t_misc(pg):
     tab(pg,'일정');assert pg.locator('.calgrid .day').count()==42
