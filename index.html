@@ -784,6 +784,7 @@ async function newEvent(ds){
     {id:'minutes',label:'길이',options:[{value:'30',label:'30분'},{value:'60',label:'1시간'},{value:'90',label:'1시간 30분'},{value:'120',label:'2시간'},{value:'180',label:'3시간'},{value:'0',label:'종일'}],value:'60'},
     ...(cals.length>1?[{id:'cal',label:'캘린더',options:cals,value:cals[0].value}]:[])]});
   if(!r)return;const title=(r.title||'').trim();if(!title){toast('제목이 필요합니다');return;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')){toast('날짜가 필요합니다');return;}
   const body={cal:r.cal||cfg.gcal.cals?.[0]||'',title,date:r.date,desc:''};if(r.minutes!=='0'&&r.time){body.time=r.time;body.minutes=r.minutes;}
   toast('일정 만드는 중…');
   try{await gcal.call('create',body);gcal.invalidate();toast(`일정 추가: ${title}`);calSel=r.date;calMonth=r.date.slice(0,7);render();}
@@ -799,8 +800,11 @@ async function editEvent(ev){
     {id:'minutes',label:'길이',options:opts,value:ev.allDay?'0':String(mins)},
     {id:'location',label:'장소',value:ev.location||''}]});
   if(!r)return;const title=(r.title||'').trim();if(!title){toast('제목이 필요합니다');return;}
-  const body={cal:ev.cal,id:ev.id,origDate:ev.start.slice(0,10),title,location:r.location||'',date:r.date,allDay:r.minutes==='0'||!r.time};
-  if(!body.allDay){body.time=r.time;body.minutes=r.minutes;}
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(r.date||'')){toast('날짜가 필요합니다');return;}
+  const allDay=r.minutes==='0'||!r.time;const body={cal:ev.cal,id:ev.id,origDate:ev.start.slice(0,10),title,location:r.location||''};
+  /* 날짜·시각을 바꿨을 때만 보낸다. 제목만 고쳤는데 여러 날 일정이 하루로 줄거나 길이가 바뀌면 안 된다 */
+  const moved=r.date!==ev.start.slice(0,10)||allDay!==!!ev.allDay||(!allDay&&(r.time!==ev.start.slice(11)||r.minutes!==String(mins)));
+  if(moved){body.date=r.date;body.allDay=allDay;if(!allDay){body.time=r.time;body.minutes=r.minutes;}}
   toast('저장 중…');
   try{await gcal.call('update',body);gcal.invalidate();toast('일정을 수정했습니다');calSel=r.date;calMonth=r.date.slice(0,7);render();}
   catch(e){toast('수정 실패: '+e.message,5000);}
@@ -809,10 +813,10 @@ async function moveEventTo(ev,ds){
   if(ds===ev.start.slice(0,10))return;
   const body={cal:ev.cal,id:ev.id,origDate:ev.start.slice(0,10),date:ds,allDay:ev.allDay};if(!ev.allDay){body.time=ev.start.slice(11);body.minutes=minutesOf(ev);}
   toast('옮기는 중…');
-  try{await gcal.call('update',body);gcal.invalidate();toast(`${ev.title} → ${ds}`);calSel=ds;render();}catch(e){toast('이동 실패: '+e.message,5000);}
+  try{await gcal.call('update',body);gcal.invalidate();toast(`${ev.title} → ${fmtDue(ds)}`);calSel=ds;render();}catch(e){toast('이동 실패: '+e.message,5000);}
 }
 async function deleteEvent(ev){
-  if(!await confirmAsk('일정을 삭제할까요?',`${ev.title} · ${ev.start.slice(0,10)} ${gcal.time(ev)}`,'삭제'))return;
+  if(!await confirmAsk('일정을 삭제할까요?',`${ev.title} · ${fmtDue(ev.start.slice(0,10))} ${gcal.time(ev)}`+(ev.recurring?' · 반복 일정의 이 회차만 지웁니다':''),'삭제'))return;
   try{await gcal.call('delete',{cal:ev.cal,id:ev.id,origDate:ev.start.slice(0,10)});gcal.invalidate();toast('삭제했습니다');render();}catch(e){toast('삭제 실패: '+e.message,5000);}
 }
 let gcalQ='',gcalResults=null,gcalShown={ym:'',events:[],at:null,offline:false},dragEv=null;
@@ -825,7 +829,7 @@ async function searchEvents(q){
 function evRow(ev,withDate,onPick){
   const act=onPick||(()=>editEvent(ev));
   return el('div',{class:'evrow',role:'button',tabindex:'0',title:onPick?'클릭하여 이동':'클릭하여 수정',style:'cursor:pointer',onclick:e=>{if(e.target.closest('.x'))return;act();},onkeydown:e=>{if(e.key==='Enter')act();}},
-    el('span',{class:'tm',style:`border-left:3px solid ${gcal.color(ev)};padding-left:6px`},(withDate?ev.start.slice(0,10)+' ':'')+gcal.time(ev)),
+    el('span',{class:'tm',style:`border-left:3px solid ${gcal.color(ev)};padding-left:6px`},(withDate?ev.start.slice(0,4)+' '+fmtDue(ev.start.slice(0,10))+' ':'')+gcal.time(ev)),
     el('span',{},ev.title,ev.location?el('span',{class:'cn'},ev.location):'',(cfg.gcal.cals||[]).length>1?el('span',{class:'cn'},ev.calName):''),
     el('button',{class:'icon x','aria-label':'일정 삭제',onclick:()=>deleteEvent(ev)},'✕'));
 }

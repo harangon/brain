@@ -118,7 +118,13 @@ function update_(p) {
   if (p.title !== undefined) ev.setTitle(String(p.title));
   if (p.location !== undefined) ev.setLocation(String(p.location));
   if (p.date) {
-    if (p.allDay || !p.time) ev.setAllDayDate(new Date(p.date + 'T00:00:00'));
+    if (p.allDay || !p.time) {
+      // 여러 날짜에 걸친 종일 일정은 길이를 지킨 채 옮긴다
+      var d0 = new Date(p.date + 'T00:00:00'), days = 1;
+      try { if (ev.isAllDayEvent()) days = Math.max(1, Math.round((ev.getAllDayEndDate() - ev.getAllDayStartDate()) / 86400000)); } catch (err) { days = 1; }
+      if (days > 1) { try { ev.setAllDayDates(d0, new Date(d0.getTime() + days * 86400000)); } catch (err) { ev.setAllDayDate(d0); } }
+      else ev.setAllDayDate(d0);
+    }
     else {
       var start = new Date(p.date + 'T' + p.time + ':00');
       var minutes = Number(p.minutes) || Math.round((ev.getEndTime() - ev.getStartTime()) / 60000) || 60;

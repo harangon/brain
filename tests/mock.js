@@ -43,11 +43,24 @@ cfg.token='mock';localStorage.clear();
 /* --- Apps Script 흉내 --- */
 window.__EVENTS=[{id:'e1',cal:'c1',calName:'기본',color:'#4a86c5',title:'치과',allDay:false,start:__D(2)+'T15:00',end:__D(2)+'T16:00',location:'',desc:''},
  {id:'e2',cal:'c1',calName:'기본',color:'#4a86c5',title:'주간 회의',allDay:false,start:__T+'T13:00',end:__T+'T14:00',location:'',desc:''}];
+let __evseq=0;window.__GLOG=[];const __p2=n=>String(n).padStart(2,'0');
+const __addD=(ds,n)=>{const d=new Date(ds+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
+const __addMin=(iso,n)=>{const d=new Date(iso+':00Z');d.setUTCMinutes(d.getUTCMinutes()+n);return d.toISOString().slice(0,16);};
 window.fetch=async(url,opt)=>{const b=JSON.parse(opt.body);let out={};
   if(b.key!=='k')out={error:'unauthorized'};
   else if(b.action==='calendars')out={calendars:[{id:'c1',name:'기본',color:'#4a86c5',mine:true,primary:true}]};
   else if(b.action==='list')out={events:__EVENTS.filter(e=>e.start.slice(0,10)<b.to&&e.end.slice(0,10)>=b.from)};
   else if(b.action==='search')out={events:__EVENTS.filter(e=>e.title.includes(b.q))};
-  else out={ok:true};
+  else if(b.action==='create'){const t=String(b.title||'').trim();if(!t)out={error:'title required'};else if(isNaN(new Date(b.date+'T00:00:00')))out={error:'Invalid Date'};
+    else{const ev={id:'m'+(++__evseq),cal:b.cal||'c1',calName:'기본',color:'#4a86c5',title:t,location:'',desc:b.desc||'',allDay:!b.time};
+      if(!b.time){ev.start=b.date+'T00:00';ev.end=__addD(b.date,1)+'T00:00';}else{ev.start=b.date+'T'+b.time;ev.end=__addMin(ev.start,Number(b.minutes)||60);}
+      __EVENTS.push(ev);__GLOG.push('create '+t);out={event:ev};}}
+  else if(b.action==='update'){const ev=__EVENTS.find(e=>e.id===b.id);if(!ev)out={error:'event not found'};else{
+      if(b.title!==undefined)ev.title=String(b.title);if(b.location!==undefined)ev.location=String(b.location);
+      if(b.date){if(b.allDay||!b.time){const days=ev.allDay?Math.max(1,Math.round((new Date(ev.end)-new Date(ev.start))/864e5)):1;ev.allDay=true;ev.start=b.date+'T00:00';ev.end=__addD(b.date,days)+'T00:00';}
+        else{const mins=Number(b.minutes)||Math.round((new Date(ev.end)-new Date(ev.start))/6e4)||60;ev.allDay=false;ev.start=b.date+'T'+b.time;ev.end=__addMin(ev.start,mins);}}
+      __GLOG.push('update '+ev.title+' '+JSON.stringify(b));out={event:ev};}}
+  else if(b.action==='delete'){const i=__EVENTS.findIndex(e=>e.id===b.id);if(i<0)out={error:'event not found'};else{__GLOG.push('delete '+__EVENTS[i].title);__EVENTS.splice(i,1);out={ok:true};}}
+  else out={error:'unknown action'};
   return{ok:true,text:async()=>JSON.stringify(out)};};
 if(new URLSearchParams(location.search).get('gcal'))cfg.gcal={url:'https://script.invalid/x',key:'k',cals:['c1'],names:{c1:'기본'}};
