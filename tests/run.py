@@ -459,6 +459,15 @@ def t_fuzz(pg):
     pg.evaluate("p=>saveNote(notes.find(n=>n.path===p),{project:pjLink('자리 B')},undefined,undefined,true)",P);idle(pg,600);c=fget(pg,P);assert '[[자리 B]]' in c and 'list' not in c and 'order' not in c,c
     pg.evaluate("p=>saveNote(notes.find(n=>n.path===p),{list:'진행 중',order:1},undefined,undefined,true)",P);idle(pg,600)
     pg.evaluate("p=>saveNote(notes.find(n=>n.path===p),{project:''},undefined,undefined,true)",P);idle(pg,600);c=fget(pg,P);assert 'project' not in c and 'list' not in c and 'order' not in c,c
+    # 없는 날짜는 날짜로 읽지 않는다
+    PW=lambda x:pg.evaluate("x=>{const w=parseWhen(x);return w?w.due:null}",x)
+    assert PW('2026-02-30 없는 날') is None and PW('13/45 이상한 날짜') is None and PW('2/30 없는 날') is None and PW('2027-02-28 있는 날')=='2027-02-28' and PW('12/25 성탄')[5:]=='12-25'
+    # 오프라인에서 보관·제목 바꾸기를 한 노트는 연결되면 폴더와 파일 이름이 맞춰진다
+    pg.evaluate("(async()=>{await createNote({type:'note',title:'끊긴 동안 보관',quiet:true});await createNote({type:'note',title:'끊긴 동안 이름',quiet:true});})()");idle(pg,800)
+    pg.evaluate("window.__OFFLINE=true;saveNote(notes.find(n=>n.title==='끊긴 동안 보관'),{archived:true},undefined,undefined,true);saveNote(notes.find(n=>n.title==='끊긴 동안 이름'),{},'이어진 뒤 이름',undefined,true)");idle(pg,800)
+    assert '20_Notes/끊긴 동안 보관.md' in files(pg) and pg.evaluate('queue.list.length')==2
+    pg.evaluate('window.__OFFLINE=false;queue.flush()');idle(pg,2500);f=files(pg)
+    assert '90_Archive/끊긴 동안 보관.md' in f and '20_Notes/끊긴 동안 보관.md' not in f and '20_Notes/이어진 뒤 이름.md' in f and '20_Notes/끊긴 동안 이름.md' not in f and pg.evaluate('queue.list.length')==0,[x for x in f if '끊긴' in x or '이어진' in x]
     # 주소 링크: 문장 속 주소만 링크가 되고 이미 링크인 것은 두 번 감싸지 않는다
     h=pg.evaluate("mdToHtml('보기 https://example.com/a. 그리고 [제목](https://example.com/b) 끝')");assert h.count('<a ')==2 and 'href="https://example.com/a"' in h and '>제목</a>' in h and 'example.com/a</a>.' in h,h
 

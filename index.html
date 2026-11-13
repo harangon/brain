@@ -720,7 +720,7 @@ const queue={
   badge(){const b=$('#qbadge');b.hidden=!queue.list.length;b.textContent=`대기 ${queue.list.length}`;b.title='오프라인에서 저장한 변경. 연결되면 자동 반영';},
   push(item){const i=queue.list.findIndex(x=>x.path===item.path);if(i>=0)queue.list.splice(i,1);queue.list.push(item);queue.save();},
   async flush(){
-    if(!queue.list.length||!navigator.onLine||queue.busy)return;queue.busy=true;let ok=0;
+    if(!queue.list.length||!navigator.onLine||queue.busy)return;queue.busy=true;let ok=0;const done=new Set();
     try{
       let skipped=0;
       while(queue.list.length-skipped>0){const it=queue.list[skipped];
@@ -732,13 +732,16 @@ const queue={
               path=it.path.replace(/\.md$/,` (오프라인 사본 ${today()}).md`);toast(`${fileTitle(it.path)}: 다른 기기 변경과 겹쳐 사본으로 저장했습니다`,5000);}
             else if(!it.base&&cur&&cur.content!==it.content){ // 오프라인에서 새로 만든 것과 같은 이름의 파일이 그 사이 생김 → 덮어쓰지 않고 날짜를 붙인다
               path=it.path.replace(/\.md$/,` ${today()} ${Date.now().toString(36).slice(-4)}.md`);const m=notes.find(x=>x.path===it.path&&!x.sha);if(m){m.path=path;if(!h1Of(m.body))m.title=fileTitle(path);}}
-            const r=await api.put(path,it.content,path===it.path&&cur?cur.sha:null,it.message);
+            const r=await api.put(path,it.content,path===it.path&&cur?cur.sha:null,it.message);done.add(path);
             const n=notes.find(x=>x.path===path);if(n)n.sha=r.content.sha;else{const{fm,body}=parseFM(it.content);notes.unshift({path,sha:r.content.sha,raw:it.content,fm,body,title:titleOf(path,body),folder:path.split('/')[0]});}
           }else if(cur)await api.del(it.path,cur.sha,it.message);
           queue.list.splice(skipped,1);queue.save();ok++;
         }catch(e){if(isNetErr(e))throw e;skipped++;toast(`대기 변경 반영 실패 (${fileTitle(it.path)}): ${e.message}`,5000);}
       }
-      if(ok){toast(`오프라인 변경 ${ok}건을 반영했습니다`);fillFolders();render();}
+      if(ok){toast(`오프라인 변경 ${ok}건을 반영했습니다`);fillFolders();render();
+        /* 오프라인에서는 못 한 폴더 옮기기·파일 이름 맞추기를 이제 한다 (보관, 제목 바꾸기) */
+        for(const pth of done){const n=notes.find(x=>x.path===pth);if(n&&!queue.list.some(q=>q.path===n.path))try{await settle(n,true);}catch{}}
+        render();}
     }catch(e){}
     queue.busy=false;saveCache();
   }
@@ -1299,7 +1302,7 @@ function renderProjects(m){
 function renderProjectBoard(m,p,q){
   const lists=listsOf(p);const hit=n=>!q||n.title.toLowerCase().includes(q);
   m.append(el('div',{class:'phead'},
-    el('button',{class:'ptitle',title:'프로젝트 카드 열기 (설명·마감·라벨·활동)',onclick:()=>openNote(p)},p.title),
+    el('button',{class:'ptitle',title:'프로젝트 열기 (설명·마감·라벨·활동)',onclick:()=>openNote(p)},p.title),
     inlineSelect(p,'status',config.statuses),p.fm.due?el('span',{class:'due'+(isLate(p)?' late':'')},'마감 '+fmtDue(p.fm.due)):'',labelTag(p),
     el('span',{class:'sp'}),el('button',{class:'btn sm',id:'projOpen',onclick:()=>openNote(p)},'상세'),el('button',{class:'btn sm pri',onclick:()=>finishProject(p)},'프로젝트 끝내기')));
   const board=el('div',{class:'tboard'});
@@ -1430,8 +1433,8 @@ function parseWhen(text){
     [/(^|\s)((?:(이번\s*주|다음\s*주|다담주|다다음\s*주)\s*([월화수목금토일])(?:요일|욜)?|([월화수목금토일])(?:요일|욜))(?:까지)?)(\s|$)/,(m)=>{const wd='일월화수목금토'.indexOf(m[4]||m[5]);const d=new Date(base);let diff=(wd-d.getDay()+7)%7;const pre=m[3]||'';
       if(/다다음/.test(pre))diff+=14;else if(/다음|다담/.test(pre)){diff=((wd-d.getDay()+7)%7)+7-(d.getDay()===0?7:0);if(diff>=14)diff-=7;}else if(diff===0&&!/이번/.test(pre))diff=7;
       d.setDate(d.getDate()+diff);return f(d);}],
-    [/(^|\s)((\d{4})-(\d{2})-(\d{2}))(\s|$)/,(m)=>m[2]],
-    [/(^|\s)((\d{1,2})[\/.](\d{1,2})\.?)(\s|$)/,(m)=>{let d=new Date(base.getFullYear(),Number(m[3])-1,Number(m[4]));if(d<base)d.setFullYear(d.getFullYear()+1);return f(d);}],
+    [/(^|\s)((\d{4})-(\d{2})-(\d{2}))(\s|$)/,(m)=>{const d=new Date(+m[3],+m[4]-1,+m[5]);return d.getMonth()===+m[4]-1&&d.getDate()===+m[5]?m[2]:null;}],
+    [/(^|\s)((\d{1,2})[\/.](\d{1,2})\.?)(\s|$)/,(m)=>{const mo=Number(m[3]),dy=Number(m[4]);if(mo<1||mo>12||dy<1||dy>31)return null;let d=new Date(base.getFullYear(),mo-1,dy);if(d<base)d=new Date(base.getFullYear()+1,mo-1,dy);return d.getMonth()===mo-1&&d.getDate()===dy?f(d):null;}],
     [/(^|\s)((\d{1,2})일(?:까지)?)(\s|$)/,(m)=>{const day=Number(m[3]);if(day<1||day>31)return null;for(let k=0;k<14;k++){const d=new Date(base.getFullYear(),base.getMonth()+k,day);if(d.getDate()===day&&d>=base)return f(d);}return null;}]];   // 그 날짜가 없는 달(31일)은 건너뛴다
   for(const[re,fn]of rules){const m=text.match(re);if(m){const due=fn(m);if(!due||isNaN(new Date(due+'T00:00')))continue;const rest=(text.slice(0,m.index)+' '+text.slice(m.index+m[0].length)).replace(/\s+/g,' ').trim();return{due,rest,token:m[2].trim()};}}
   return null;
