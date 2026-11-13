@@ -392,8 +392,11 @@ def t_repeat(pg):
     pg.fill(inp,'매일 물 마시기');pg.press(inp,'Enter');idle(pg);c=fget(pg,'20_Notes/물 마시기.md');assert 'repeat: daily' in c and f'due: {td}' in c,c
     pg.click('.tdadd .chip[data-id=none]');pg.fill(inp,'매월 31일 정산');pg.press(inp,'Enter');idle(pg);c=fget(pg,'20_Notes/정산.md');assert 'repeat: monthly' in c and 'repeat-day: 31' in c and '-31' in c,c
     pg.click('.tdadd .chip[data-id=today]')
+    # 할 일도 제목을 누르면 열린다 (노트 목록과 같은 방식). 프로젝트 표시는 누르는 것이 아니다
+    pg.click('.trow .tx .tt:text-is("물 마시기")');idle(pg);assert pg.input_value('#card .ctitle')=='물 마시기';close(pg)
+    assert pg.locator('.trow button.nt').count()==0 and pg.locator('.trow span.nt').count()>0
     # 완료 → 날짜만 다음으로, 완료 상태는 아니다. 줄에 ↻ 표시
-    row='.trow:has(.tx span:text-is("물 마시기"))';assert '↻ 매일' in pg.inner_text(row+' >> nth=0')
+    row='.trow:has(.tx .tt:text-is("물 마시기"))';assert '↻ 매일' in pg.inner_text(row+' >> nth=0')
     pg.click(row+' >> nth=0 >> input[type=checkbox]');idle(pg,700);c=fget(pg,'20_Notes/물 마시기.md')
     assert f"due: {pg.evaluate('addDays(today(),1)')}" in c and 'status' not in c and 'repeat: daily' in c,c
     assert pg.locator(row).count()>=1 and not pg.is_checked(row+' >> nth=0 >> input[type=checkbox]')
