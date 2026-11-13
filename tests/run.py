@@ -371,6 +371,47 @@ def t_ended(pg):
     pg.evaluate("unarchive(projectNote('끝낼 프로젝트'))");idle(pg,1200);tab(pg,'프로젝트');tab(pg,'노트')
     assert '끝낼 프로젝트의 메모' in rows(pg) and (pg.locator(sec).count()==0 or '끝낼 프로젝트의 메모' not in pg.inner_text(sec))
 
+def t_repeat(pg):
+    """반복 할 일: 완료하면 다음 차례로 넘어간다 (brain 안에서만)"""
+    td=pg.evaluate('today()')
+    # 날짜 계산 (시간대와 무관)
+    assert pg.evaluate("addDays('2026-11-13',1)")=='2026-11-14' and pg.evaluate("addDays('2026-12-31',1)")=='2027-01-01' and pg.evaluate("addDays('2026-03-01',-1)")=='2026-02-28'
+    S=lambda d,r,a=0:pg.evaluate("([d,r,a])=>stepDue(d,r,a)",[d,r,a])
+    assert S('2026-11-13','daily')=='2026-11-14' and S('2026-11-13','weekly')=='2026-11-20' and S('2026-11-13','weekday')=='2026-11-16' and S('2026-11-12','weekday')=='2026-11-13'
+    assert S('2026-11-25','monthly')=='2026-12-25' and S('2026-12-25','monthly')=='2027-01-25' and S('2026-01-31','monthly',31)=='2026-02-28' and S('2026-02-28','monthly',31)=='2026-03-31'
+    assert S('2026-03-01','yearly')=='2027-03-01' and S('2028-02-29','yearly',29)=='2029-02-28'
+    PR=lambda x:pg.evaluate("x=>{const r=parseRepeat(x);return r?[r.rule,r.rest]:null}",x)
+    assert PR('매주 금요일 분리수거')==['weekly','금요일 분리수거'] and PR('관리비 매월 25일')==['monthly','관리비 25일'] and PR('평일마다 스트레칭')==['weekday','스트레칭'] and PR('매일매일 일기') is None and PR('보고서')is None
+    # 입력: 적은 대로 읽는다
+    tab(pg,'할 일');pg.click('.tdside button[data-key="*"]') if pg.get_attribute('.tdside button[data-key="*"]','aria-pressed')!='true' else None;idle(pg)
+    inp='.tdadd input[type=text]';pg.click('.tdadd .chip[data-id=today]')
+    pg.fill(inp,'매주 금요일 분리수거 내기');idle(pg,200);assert '↻ 매주' in pg.inner_text('.tdprev');shot(pg,'17-repeat-input');pg.press(inp,'Enter');idle(pg)
+    P='20_Notes/분리수거 내기.md';c=fget(pg,P);fri=pg.evaluate("parseWhen('금요일').due");assert 'repeat: weekly' in c and f'due: {fri}' in c and 'todo: true' in c and 'repeat-day' not in c,c
+    pg.fill(inp,'매일 물 마시기');pg.press(inp,'Enter');idle(pg);c=fget(pg,'20_Notes/물 마시기.md');assert 'repeat: daily' in c and f'due: {td}' in c,c
+    pg.click('.tdadd .chip[data-id=none]');pg.fill(inp,'매월 31일 정산');pg.press(inp,'Enter');idle(pg);c=fget(pg,'20_Notes/정산.md');assert 'repeat: monthly' in c and 'repeat-day: 31' in c and '-31' in c,c
+    pg.click('.tdadd .chip[data-id=today]')
+    # 완료 → 날짜만 다음으로, 완료 상태는 아니다. 줄에 ↻ 표시
+    row='.trow:has(.tx span:text-is("물 마시기"))';assert '↻ 매일' in pg.inner_text(row+' >> nth=0')
+    pg.click(row+' >> nth=0 >> input[type=checkbox]');idle(pg,700);c=fget(pg,'20_Notes/물 마시기.md')
+    assert f"due: {pg.evaluate('addDays(today(),1)')}" in c and 'status' not in c and 'repeat: daily' in c,c
+    assert pg.locator(row).count()>=1 and not pg.is_checked(row+' >> nth=0 >> input[type=checkbox]')
+    # 밀린 것은 지난 횟수만큼 쌓지 않고 오늘 뒤의 가장 가까운 차례로. 체크리스트는 다시 비운다
+    pg.evaluate("p=>saveNote(notes.find(n=>n.path===p),{due:addDays(today(),-20)},undefined,'## 준비\\n- [x] 종이\\n- [ ] 병\\n',true)",P);idle(pg,600)
+    pg.evaluate("p=>saveNote(notes.find(n=>n.path===p),{status:'done'},undefined,undefined,true)",P);idle(pg,600);c=fget(pg,P)
+    due=[l for l in c.split('\n') if l.startswith('due:')][0][5:];assert td<due<=pg.evaluate('addDays(today(),7)') and '- [ ] 종이' in c and '[x]' not in c and 'status' not in c,c
+    # 노트 화면: 반복 칩으로 바꾸고, 끝 날짜를 넘으면 그냥 완료된다
+    pg.evaluate("p=>openNote(notes.find(n=>n.path===p))",P);idle(pg);assert '매주' in pg.inner_text('#card .rchip')
+    shot(pg,'18-repeat-note')
+    pg.select_option('#card .rchip select','monthly');idle(pg);assert 'repeat: monthly' in fget(pg,P) and '매월' in pg.inner_text('#card .rchip')
+    pg.fill('#card .chip input[aria-label="반복 끝 날짜"]',due);idle(pg);assert f'repeat-until: {due}' in fget(pg,P)
+    pg.check('#card .cdone');idle(pg,700);c=fget(pg,P);assert 'status: done' in c and f'due: {due}' in c,c
+    pg.uncheck('#card .cdone');idle(pg,600);pg.select_option('#card .rchip select','');idle(pg);c=fget(pg,P);assert 'repeat' not in c,c
+    assert pg.locator('#card .chip input[aria-label="반복 끝 날짜"]').count()==0;close(pg)
+    # 프로젝트 보드: 완료 줄로 끌어도 반복 할 일은 제자리에 남고 날짜만 넘어간다
+    pg.evaluate("(async()=>{await createNote({type:'project',title:'반복 프로젝트',quiet:true});await createNote({type:'todo',title:'주간 점검',due:today(),project:'반복 프로젝트',quiet:true,extra:{repeat:'weekly'}});})()");idle(pg,800)
+    pg.evaluate("(async()=>{const p=projectNote('반복 프로젝트'),n=notes.find(x=>x.title==='주간 점검');await moveCard(n,p,DONE_LIST,null);})()");idle(pg,800)
+    c=fget(pg,'20_Notes/주간 점검.md');assert f"due: {pg.evaluate('addDays(today(),7)')}" in c and 'status' not in c and 'list: 완료' not in c,c
+
 def t_settings(pg):
     pg.click('#btnSettings');idle(pg,200);tabs=pg.inner_text('#settings .mh');assert '저장한 보기' not in tabs and '뷰' not in pg.inner_text('#settings')
     pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
@@ -422,10 +463,10 @@ def t_unit(pg):
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
-TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_settings,t_offline,t_stale,t_edit,t_refs,t_ended]
+TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_settings,t_offline,t_stale,t_edit,t_refs,t_ended,t_repeat]
 if os.environ.get('ONLY'):TESTS=[x for x in TESTS if x.__name__ in os.environ['ONLY'].split(',')]   # 일부만: ONLY=t_edit python3 tests/run.py
 with sync_playwright() as p:
-    b=p.chromium.launch();pg0=None;pg=b.new_page(viewport={'width':1280,'height':860});errs=[]
+    b=p.chromium.launch();pg0=None;pg=b.new_page(viewport={'width':1280,'height':860},timezone_id='Asia/Seoul');errs=[]   # 한국 시간으로 돌린다 (날짜 계산이 시간대에 흔들리지 않는지)
     pg.on('pageerror',lambda e:errs.append(str(e)));pg.on('console',lambda m:errs.append('console: '+m.text) if m.type=='error' else None)
     pg.goto(MOCK+'?gcal=1');pg.wait_for_selector('#main table, #main .status');idle(pg,900)
     for t in TESTS:
@@ -438,7 +479,7 @@ with sync_playwright() as p:
                     if pg.is_visible(sel):pg.click(sel,timeout=500)
                 except Exception:pass
     # 폰 화면
-    m=b.new_page(viewport={'width':360,'height':760});m.on('pageerror',lambda e:errs.append('mobile: '+str(e)))
+    m=b.new_page(viewport={'width':360,'height':760},timezone_id='Asia/Seoul');m.on('pageerror',lambda e:errs.append('mobile: '+str(e)))
     m.goto(MOCK);m.wait_for_selector('#main table, #main .status');idle(m,900)
     try:
         assert m.evaluate('document.documentElement.scrollWidth<=window.innerWidth+1'),'폰에서 가로 스크롤'
