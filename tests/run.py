@@ -29,6 +29,8 @@ def tab(pg,name):
     idle(pg)
 def side(pg,k,v):   # 노트 탭의 프로젝트·라벨 고르기 상자. 이미 고른 것을 다시 고르면 풀린다(전체)
     pg.evaluate("""([k,v])=>{const s=document.querySelector(`.nmain .fsels select[data-k="${k}"]`);const os=[...s.options];let o=os.find(o=>o.dataset.v===v);if(o.selected&&v!=='')o=os[0];s.value=o.value;s.dispatchEvent(new Event('change'));}""",[k,v]);idle(pg)
+def tside(pg,k,v):   # 할 일 탭의 프로젝트·라벨 고르기 상자 (프로젝트 전체는 '*')
+    pg.evaluate("""([k,v])=>{const s=document.querySelector(`.tdmain .fsels select[data-k="${k}"]`);const os=[...s.options];let o=os.find(o=>o.dataset.v===v);if(o.selected)o=os[0];s.value=o.value;s.dispatchEvent(new Event('change'));}""",[k,v]);idle(pg)
 def side_on(pg,k):return pg.evaluate("""k=>{const s=document.querySelector(`.nmain .fsels select[data-k="${k}"]`);return s.selectedOptions[0].dataset.v}""",k)
 def rows(pg):return pg.eval_on_selector_all('#main tbody tr td.t>button:first-child','e=>e.map(x=>x.textContent)')
 def open_row(pg,title):pg.click(f'#main td.t>button:first-child:text-is("{title}")');idle(pg)
@@ -138,7 +140,7 @@ def t_views(pg):
     pg.click('#subtabs button:has-text("갤러리")');idle(pg);assert pg.locator('.gcard').count()>3
     pg.click('#subtabs button:has-text("표")');idle(pg)
 def t_archive_view(pg):
-    # 보관은 탭마다: 노트 탭 "보관한 노트", 할 일 탭 "보관된 할 일", 프로젝트 탭 "끝낸 프로젝트"
+    # 보관은 탭마다: 노트 탭 "보관한 노트", 할 일 탭 "보관한 할 일", 프로젝트 탭 "끝낸 프로젝트"
     view(pg,'노트');assert '옛 노트' not in rows(pg);pg.click('[data-sec=narch] .hd');idle(pg);pg.click('[data-sec=narch] .trow button:text-is("옛 노트")');idle(pg)
     act(pg,'되살리기');idle(pg,500);assert '20_Notes/옛 노트.md' in files(pg) and 'archived' not in fget(pg,'20_Notes/옛 노트.md');close(pg);assert '옛 노트' in rows(pg)
     tab(pg,'할 일');pg.click('[data-sec=arch] .hd');idle(pg);pg.click('[data-sec=arch] .trow button:text-is("끝난 일")');idle(pg)
@@ -147,23 +149,23 @@ def t_archive_view(pg):
     assert '90_Archive/끝난 일.md' not in files(pg);close(pg)
     proj_home(pg);pg.click('[data-sec=parch] .hd');idle(pg);assert '옛 프로젝트' in pg.inner_text('[data-sec=parch]');pg.click('[data-sec=parch] .hd');idle(pg);tab(pg,'노트')
 def t_todo(pg):
-    tab(pg,'할 일');side=pg.inner_text('.tdside')
+    tab(pg,'할 일');side=pg.text_content('.tdmain .fsels');assert pg.locator('.tdside').count()==0 and pg.locator('.tdadd select').count()==0
     assert '프로젝트 없음' in side and '집 정리' in side and '2/5' in side,side
     assert pg.locator('[data-sec=todaylate]').count()==1 and not pg.is_visible('[data-sec=todaylate]')
     inp='.tdadd input[type=text]';pg.fill(inp,'금요일 벤더 견적');idle(pg,200)
     assert pg.is_visible('[data-sec=todaylate]'),'다른 날짜를 볼 때 오늘·지연이 보여야 함'
     assert '프로젝트 없음' in pg.inner_text('.tdprev')
-    pg.select_option('.tdadd select','집 정리');pg.press(inp,'Enter');idle(pg)
+    tside(pg,'project','집 정리');pg.fill(inp,'금요일 벤더 견적');assert '집 정리에 추가' in pg.get_attribute(inp,'placeholder') and '프로젝트 집 정리' in pg.inner_text('.tdprev');pg.press(inp,'Enter');idle(pg)
     c=fget(pg,'20_Notes/벤더 견적.md');assert c and 'project: "[[집 정리]]"' in c and 'due: ' in c and 'label' not in c,c
     assert '옛 할 일' in pg.inner_text('.tdmain') or True
-    pg.click('.tdside button[data-key=""]');idle(pg);txt=pg.inner_text('.tdmain');assert '우유 사기' in txt and '업체 견적' not in txt
+    tside(pg,'project','');txt=pg.inner_text('.tdmain');assert '우유 사기' in txt and '업체 견적' not in txt
     pg.fill(inp,'세탁소');pg.press(inp,'Enter');idle(pg);c=fget(pg,'20_Notes/세탁소.md');assert c and 'project' not in c,c
-    pg.click('.tdside button[data-key="*"]');idle(pg)
+    tside(pg,'project','*')
     # 라벨로 거르기: 그 라벨의 할 일만, 새 할 일도 그 라벨로
-    pg.click('.tdside button[data-label="work"]');idle(pg);txt=pg.inner_text('.tdmain');assert '건강검진 예약' in txt and '우유 사기' not in txt,txt
+    tside(pg,'label','work');txt=pg.inner_text('.tdmain');assert '건강검진 예약' in txt and '우유 사기' not in txt,txt
     assert '라벨 업무' in pg.inner_text('.tdprev') or True
     pg.fill(inp,'회의록 정리');pg.press(inp,'Enter');idle(pg);c=fget(pg,'20_Notes/회의록 정리.md');assert c and 'label: work' in c,c
-    pg.click('.tdside button[data-label="work"]');idle(pg);assert '우유 사기' in pg.inner_text('.tdmain')
+    tside(pg,'label','work');assert '우유 사기' in pg.inner_text('.tdmain')
     pg.click('[data-sec=done] .hd');idle(pg);assert '주간 정리 때 보관' in pg.inner_text('[data-sec=done] .hd') and '비용 비교' in pg.inner_text('[data-sec=done]')
     # 완료 체크
     pg.click('.tdtoday .trow:has-text("우유 사기") input[type=checkbox]');idle(pg);assert 'status: done' in fget(pg,'20_Notes/우유 사기.md')
@@ -172,7 +174,7 @@ def t_todo(pg):
     pg.click('.tdadd .chip[data-id=today]');idle(pg)
 def t_todo_when(pg):
     # 오늘 / 날짜 / 나중에 — 세 선택 모두 할 일로 만들어지고 할 일 탭에 나온다
-    tab(pg,'할 일');pg.click('.tdside button[data-key="*"]');idle(pg);inp='.tdadd input[type=text]'
+    tab(pg,'할 일');tside(pg,'project','*');inp='.tdadd input[type=text]'
     td=pg.evaluate('today()');d7=pg.evaluate('addDays(today(),7)')
     pg.click('.tdadd .chip[data-id=today]');pg.fill(inp,'칩 하나');pg.press(inp,'Enter');idle(pg)
     c=fget(pg,'20_Notes/칩 하나.md');assert c and 'type: note' in c and f'due: {td}' in c and 'todo: true' in c,c
@@ -253,7 +255,7 @@ def t_project_restore(pg):
     c=fget(pg,'10_Projects/임시 프로젝트.md');assert c and 'status: active' in c and 'archived' not in c,c
     assert '보관됨' not in pg.inner_text('#card .chiprow') and '프로젝트 끝내기' in pg.inner_text('#card .actions')
     assert '20_Notes/임시 할 일.md' in files(pg) and 'archived' not in fget(pg,'20_Notes/임시 할 일.md') and '임시 할 일' in pg.inner_text('#card')
-    close(pg);tab(pg,'할 일');assert '임시 프로젝트' in pg.inner_text('.tdside');tab(pg,'노트')
+    close(pg);tab(pg,'할 일');assert '임시 프로젝트' in pg.text_content('.tdmain .fsels');tab(pg,'노트')
 def t_delete_project(pg):
     proj_card(pg,'블로그 새단장');pg.click('#card .actions .danger');assert '프로젝트 없음' in pg.inner_text('#askMsg');ok(pg);idle(pg,600)
     assert '10_Projects/블로그 새단장.md' not in files(pg) and 'project' not in fget(pg,'20_Notes/도메인 연장.md')
@@ -385,7 +387,7 @@ def t_repeat(pg):
     PR=lambda x:pg.evaluate("x=>{const r=parseRepeat(x);return r?[r.rule,r.rest]:null}",x)
     assert PR('매주 금요일 분리수거')==['weekly','금요일 분리수거'] and PR('관리비 매월 25일')==['monthly','관리비 25일'] and PR('평일마다 스트레칭')==['weekday','스트레칭'] and PR('매일매일 일기') is None and PR('보고서')is None
     # 입력: 적은 대로 읽는다
-    tab(pg,'할 일');pg.click('.tdside button[data-key="*"]') if pg.get_attribute('.tdside button[data-key="*"]','aria-pressed')!='true' else None;idle(pg)
+    tab(pg,'할 일');tside(pg,'project','*')
     inp='.tdadd input[type=text]';pg.click('.tdadd .chip[data-id=today]')
     pg.fill(inp,'매주 금요일 분리수거 내기');idle(pg,200);assert '↻ 매주' in pg.inner_text('.tdprev');shot(pg,'17-repeat-input');pg.press(inp,'Enter');idle(pg)
     P='20_Notes/분리수거 내기.md';c=fget(pg,P);fri=pg.evaluate("parseWhen('금요일').due");assert 'repeat: weekly' in c and f'due: {fri}' in c and 'todo: true' in c and 'repeat-day' not in c,c
@@ -393,8 +395,11 @@ def t_repeat(pg):
     pg.click('.tdadd .chip[data-id=none]');pg.fill(inp,'매월 31일 정산');pg.press(inp,'Enter');idle(pg);c=fget(pg,'20_Notes/정산.md');assert 'repeat: monthly' in c and 'repeat-day: 31' in c and '-31' in c,c
     pg.click('.tdadd .chip[data-id=today]')
     # 할 일도 제목을 누르면 열린다 (노트 목록과 같은 방식). 프로젝트 표시는 누르는 것이 아니다
-    pg.click('.trow .tx .tt:text-is("물 마시기")');idle(pg);assert pg.input_value('#card .ctitle')=='물 마시기';close(pg)
-    assert pg.locator('.trow button.nt').count()==0 and pg.locator('.trow span.nt').count()>0
+    pg.click('.trow:visible .tx .tt:text-is("물 마시기")');idle(pg);assert pg.input_value('#card .ctitle')=='물 마시기';close(pg)
+    r1='.trow:visible:has(.tx .tt:text-is("물 마시기")) >> nth=0';assert pg.locator(r1+' >> select.inl.pj').count()==1
+    pj=pg.eval_on_selector(r1+' >> select.inl.pj','s=>[...s.options].map(o=>o.value).filter(Boolean)[0]')
+    pg.select_option(r1+' >> select.inl.pj',pj);idle(pg,700);assert f'project: "[[{pj}]]"' in fget(pg,'20_Notes/물 마시기.md')
+    pg.select_option(r1+' >> select.inl.pj','');idle(pg,700);assert 'project' not in fget(pg,'20_Notes/물 마시기.md')
     # 완료 → 날짜만 다음으로, 완료 상태는 아니다. 줄에 ↻ 표시
     row='.trow:has(.tx .tt:text-is("물 마시기"))';assert '↻ 매일' in pg.inner_text(row+' >> nth=0')
     pg.click(row+' >> nth=0 >> input[type=checkbox]');idle(pg,700);c=fget(pg,'20_Notes/물 마시기.md')
