@@ -33,6 +33,7 @@ const __net=()=>{if(window.__OFFLINE)throw new TypeError('Failed to fetch');};
 api.tree=async()=>{__net();return{tree:Object.keys(__FILES).map(p=>({path:p,type:'blob',sha:__sha(p)}))};};
 api.file=async(p,a)=>{__net();if(__FILES[p]!==undefined)return{sha:__sha(p),content:__FILES[p]};if(a)return null;throw new Error('GitHub 404 Not Found');};
 api.put=async(p,c,sha,m)=>{__net();if(__FILES[p]!==undefined&&sha!==__sha(p))throw new Error(sha?'GitHub 409 does not match':'GitHub 422 sha was not supplied');
+  if(__FILES[p]===undefined&&sha)throw new Error('GitHub 404 Not Found');   // 지워진 파일을 옛 sha 로 고치려 함
   __FILES[p]=c;__SHA[p]='n'+(++__seq);__LOG.push('PUT '+p+' | '+m);return{content:{sha:__SHA[p]}};};
 api.del=async(p,sha,m)=>{__net();if(__FILES[p]===undefined)throw new Error('GitHub 404 Not Found');if(sha!==__sha(p))throw new Error('GitHub 409 does not match');delete __FILES[p];delete __SHA[p];__LOG.push('DEL '+p+' | '+m);};
 api.req=async u=>{__net();if(u.includes('/commits'))return[{commit:{author:{date:new Date().toISOString()},message:'web: 테스트'}}];throw new Error('mock req '+u);};

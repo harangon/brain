@@ -471,6 +471,31 @@ def t_fuzz(pg):
     # 주소 링크: 문장 속 주소만 링크가 되고 이미 링크인 것은 두 번 감싸지 않는다
     h=pg.evaluate("mdToHtml('보기 https://example.com/a. 그리고 [제목](https://example.com/b) 끝')");assert h.count('<a ')==2 and 'href="https://example.com/a"' in h and '>제목</a>' in h and 'example.com/a</a>.' in h,h
 
+def t_merge(pg):
+    """다른 기기가 먼저 고친 노트를 고쳐도 내 변경이 사라지지 않는다 (합쳐서 저장)"""
+    pg.evaluate("createNote({type:'todo',title:'합치기 시험',due:today(),body:'첫 줄\\n\\n## 준비\\n- [ ] 하나\\n',quiet:true})");idle(pg,700);P='20_Notes/합치기 시험.md'
+    other=lambda js:pg.evaluate("async ([p,js])=>{const f=await api.file(p);await api.put(p,new Function('c','return '+js)(f.content),f.sha,'ext: 다른 기기');}",[P,js])
+    tab(pg,'할 일');tside(pg,'project','*') if pg.evaluate('todoFolder')!='*' else None
+    pg.click('.trow:visible .tx .tt:text-is("합치기 시험")');idle(pg)
+    # 다른 기기: 설명 줄을 고치고 라벨을 붙임 / 나: 체크리스트 항목 추가
+    other("c.replace('첫 줄','첫 줄 (폰에서 고침)').replace('type: note','type: note\\nlabel: work')");idle(pg,200)
+    pg.fill('#card .cl .add input','둘');pg.press('#card .cl .add input','Enter');idle(pg,1500);c=fget(pg,P)
+    assert '첫 줄 (폰에서 고침)' in c and '- [ ] 하나\n- [ ] 둘' in c and 'label: work' in c,c
+    assert '합쳐 저장했습니다' in pg.inner_text('#toast') and '둘 다' not in pg.inner_text('#toast'),pg.inner_text('#toast')
+    assert '폰에서 고침' in pg.inner_text('#card .desc') and '둘' in pg.inner_text('#card .cl'),'화면도 합친 내용으로'
+    # 속성만 바꾸는 경우 (완료 체크): 다른 기기의 본문 변경은 그대로
+    other("c.replace('- [ ] 하나','- [x] 하나')");idle(pg,200)
+    pg.click('#card .cdone');idle(pg,1500);c=fget(pg,P);assert '- [x] 하나' in c and 'status: done' in c,c
+    pg.click('#card .cdone');idle(pg,900)
+    # 같은 줄을 서로 다르게 고치면 둘 다 남긴다
+    other("c.replace('첫 줄 (폰에서 고침)','첫 줄 — 폰 판')");idle(pg,200)
+    pg.click('#card section h3 button:text-is("편집")');idle(pg,300);pg.keyboard.press('Control+End');pg.keyboard.type(' — PC 판');pg.click('#card .dedit button:text-is("저장")');idle(pg,1500);c=fget(pg,P)
+    assert '첫 줄 — 폰 판' in c and 'PC 판' in c and '둘 다' in pg.inner_text('#toast'),c
+    # 다른 기기가 지운 노트를 고치면 지금 내용으로 다시 만든다
+    pg.evaluate("async p=>{const f=await api.file(p);await api.del(p,f.sha,'ext: 삭제');}",P);idle(pg,300);assert P not in files(pg)
+    pg.fill('#card .cl .add input','셋');pg.press('#card .cl .add input','Enter');idle(pg,1500);c=fget(pg,P);assert c and '- [ ] 셋' in c and '다시 만들었습니다' in pg.inner_text('#toast'),c
+    close(pg);assert pg.evaluate("p=>{const n=notes.find(x=>x.path===p);return n&&n.raw===__FILES[p]&&!!n.sha}",P)
+
 def t_settings(pg):
     pg.click('#btnSettings');idle(pg,200);tabs=pg.inner_text('#settings .mh');assert '저장한 보기' not in tabs and '뷰' not in pg.inner_text('#settings')
     pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
@@ -538,7 +563,7 @@ def t_unit(pg):
     assert ev("targetFolder({fm:{type:'project',archived:true},folder:'10_Projects'})")=='90_Archive'
     assert ev("projectOf({fm:{type:'todo',project:'ToDo'},folder:'11_Todos'})")=='' and ev("projectOf({fm:{type:'note',project:'[[가|나]]'},folder:'20_Notes'})")=='가'
     assert ev("parseWhen('내일 회의').rest")=='회의'
-TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_settings,t_offline,t_stale,t_edit,t_refs,t_ended,t_repeat,t_fuzz]
+TESTS=[t_unit,t_load,t_suggest,t_quick,t_views,t_archive_view,t_todo,t_todo_when,t_convert,t_rename,t_project,t_project_restore,t_delete_project,t_misc,t_docs_rename,t_settings,t_offline,t_stale,t_edit,t_refs,t_ended,t_repeat,t_fuzz,t_merge]
 if os.environ.get('ONLY'):TESTS=[x for x in TESTS if x.__name__ in os.environ['ONLY'].split(',')]   # 일부만: ONLY=t_edit python3 tests/run.py
 with sync_playwright() as p:
     b=p.chromium.launch();pg0=None;pg=b.new_page(viewport={'width':1280,'height':860},timezone_id='Asia/Seoul');errs=[]   # 한국 시간으로 돌린다 (날짜 계산이 시간대에 흔들리지 않는지)
