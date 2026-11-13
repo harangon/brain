@@ -425,8 +425,24 @@ def t_repeat(pg):
 def t_settings(pg):
     pg.click('#btnSettings');idle(pg,200);tabs=pg.inner_text('#settings .mh');assert '저장한 보기' not in tabs and '뷰' not in pg.inner_text('#settings')
     pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
-    assert pg.locator('#optStatus .opt').count()==3 and pg.locator('#optStatus .opt button.x').count()==1 and pg.locator('#optStatus input.id[disabled]').count()==2
-    pg.click('#sCancel');idle(pg,200)
+    assert pg.locator('#optStatus .opt').count()==3 and pg.locator('#optStatus .opt button.x').count()==1,'진행·완료는 지울 수 없다'
+    # 파일에 저장되는 값(id)·영문 색 이름은 화면에 나오지 않는다
+    body=pg.inner_text('#settings .mb[data-tab=props]');vals=pg.eval_on_selector_all('#settings .mb[data-tab=props] input','e=>e.map(x=>x.value)')
+    assert not any(k in body+' '.join(vals) for k in ['active','done','mine','moc','yellow','brain.config','id']),(body,vals)
+    assert pg.locator('#settings input.id').count()==0 and '노랑' in pg.text_content('#optLabel') and '사용' in pg.inner_text('#optLabel')
+    # 이름만 적어 라벨·항목을 만든다. 저장용 값은 이름에서 만들어지고, 이름을 바꿔도 값은 그대로다
+    pg.click('#addLabel');pg.keyboard.type('여행 계획');pg.select_option('#optLabel .opt >> nth=-1 >> select','red')
+    pg.fill('#optLabel .opt >> nth=0 >> input','번뜩임')
+    pg.click('#addProp');pg.keyboard.type('장소');pg.click('#addProp');pg.keyboard.type('우선순위');pg.select_option('#optProps .opt >> nth=-1 >> select','select');pg.keyboard.type('높음, 보통')
+    pg.click('#sSave');idle(pg,900);import json;c=json.loads(fget(pg,'_scripts/brain.config.json'))
+    lb={o['id']:o for o in c['labels']};assert lb['여행-계획']=={'id':'여행-계획','name':'여행 계획','color':'red'} and lb['idea']['name']=='번뜩임',c['labels']
+    pr={o['id']:o for o in c['props']};assert pr['장소']['type']=='text' and pr['우선순위']['options']==['높음','보통'],c['props']
+    assert [o['id'] for o in c['statuses']]==['active','paused','done']
+    # 라벨 색이 실제로 칠해진다 (기본 회색 바탕에 덮이지 않는다)
+    tab(pg,'노트');cols=pg.eval_on_selector_all('#main td .tag','e=>e.map(x=>getComputedStyle(x).backgroundColor)');assert len(set(cols))>1,cols
+    pg.click('#btnSettings');idle(pg,200);pg.click('#settings .mh button[data-tab=props]');idle(pg,200)
+    pg.fill('#optLabel .opt >> nth=0 >> input','아이디어');pg.click('#optLabel .opt:has(input[value="여행 계획"]) .x');pg.click('#optProps .opt >> nth=0 >> .x');pg.click('#optProps .opt >> nth=0 >> .x')
+    pg.click('#sSave');idle(pg,900);c=json.loads(fget(pg,'_scripts/brain.config.json'));assert len(c['labels'])==6 and c['props']==[] and c['labels'][0]['name']=='아이디어',c
 def t_stale(pg):
     # 다른 기기·AI가 바꾼 것을 조용히 받아온다: 새 파일, 옮긴 파일, 고친 파일, 지운 파일
     tab(pg,'노트');pg.click('.nside button[data-k="project"][data-v=""]') if False else None
