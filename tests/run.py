@@ -497,55 +497,87 @@ def t_merge(pg):
     close(pg);assert pg.evaluate("p=>{const n=notes.find(x=>x.path===p);return n&&n.raw===__FILES[p]&&!!n.sha}",P)
 
 def t_calendar(pg):
-    """일정 탭: Google 일정 만들기·고치기·옮기기·지우기 (Apps Script 흉내는 gcal.gs 와 같은 규칙)"""
+    """일정 탭: 시작 ~ 종료로 만들기·고치기, 여러 날 일정, 끌어서 만들기 (Apps Script 흉내는 gcal.gs 와 같은 규칙)"""
     td=pg.evaluate('today()');D=lambda n:pg.evaluate('n=>addDays(today(),n)',n)
     EV=lambda title:pg.evaluate("t=>{const e=__EVENTS.find(e=>e.title===t);return e?[e.start,e.end,e.allDay,e.location]:null}",title)
-    F=lambda k:f'#askField .fields >> nth=0 >> :nth-match(input,select, {k})'
-    def fld(label,val,kind='fill'):
-        loc=pg.locator('#askField .fields label',has_text=label).first.locator('xpath=following-sibling::*[1]')
-        loc.select_option(val) if kind=='sel' else loc.fill(val)
-    def fval(label):return pg.locator('#askField .fields label',has_text=label).first.locator('xpath=following-sibling::*[1]').input_value()
+    A=lambda name:f'#askField [aria-label="{name}"]'
+    def setv(name,val):   # 값을 넣고 change 를 일으킨다 (날짜·시각 칸)
+        pg.fill(A(name),val);pg.dispatch_event(A(name),'change');idle(pg,80)
+    val=lambda name:pg.input_value(A(name))
+    title=lambda v:pg.fill('#askField .fields > input >> nth=0',v)
+    daytext=lambda n:pg.evaluate("ds=>{calSel=ds;calMonth=ds.slice(0,7);render();return document.querySelector('.daylist').innerText}",D(n))
     tab(pg,'일정');idle(pg,600);pg.click('.calh button:text-is("오늘")');idle(pg,400)
-    # 새 일정: 시작 시각이 비어 있지 않다 (길이 1시간과 맞는 기본값). 다른 날은 09:00
-    pg.click('.evbar .addbtn');idle(pg,200);assert fval('길이')=='60' and (fval('시작')!='' or pg.evaluate('new Date().getHours()')==23)
-    fld('제목','점검 회의');fld('날짜',D(3));fld('시작','10:30');fld('길이','90','sel');ok(pg);idle(pg,700)
+    # 새 일정: 시작·종료가 채워져 있고 기본 길이는 1시간. 다른 날은 09:00~10:00
+    daytext(3);pg.click('.evbar .addbtn');idle(pg,200)
+    assert not pg.is_checked(A('종일')) and [val('시작 날짜'),val('시작 시각'),val('종료 날짜'),val('종료 시각')]==[D(3),'09:00',D(3),'10:00']
+    # 시작을 바꾸면 종료가 같은 길이만큼 따라간다. 빠른 길이 칩. 종료가 시작보다 앞서면 바로잡는다
+    title('점검 회의');setv('시작 시각','10:30');assert val('종료 시각')=='11:30'
+    pg.click('#askField .dur .chip[data-min="120"]');assert val('종료 시각')=='12:30'
+    setv('시작 날짜',D(4));assert [val('종료 날짜'),val('종료 시각')]==[D(4),'12:30']
+    setv('종료 시각','09:00');assert [val('종료 날짜'),val('종료 시각')]==[D(4),'11:30'],'종료가 시작보다 앞서면 시작 + 1시간'
+    setv('시작 날짜',D(3));setv('종료 시각','12:00');ok(pg);idle(pg,700)
     assert EV('점검 회의')==[D(3)+'T10:30',D(3)+'T12:00',False,''],EV('점검 회의')
-    assert pg.evaluate('calSel')==D(3) and '점검 회의' in pg.inner_text('.daylist') and '10:30–12:00' in pg.inner_text('.daylist')
-    assert '10:30 점검 회의' in pg.inner_text('.calgrid .day.sel')
-    # 종일 일정
-    pg.click('.evbar .addbtn');idle(pg,200);assert fval('시작')=='09:00','다른 날 기본 시작은 9시';fld('제목','휴가');fld('길이','0','sel');ok(pg);idle(pg,700)
-    assert EV('휴가')==[D(3)+'T00:00',D(4)+'T00:00',True,''] and '종일' in pg.inner_text('.daylist')
-    assert '휴가' not in (pg.evaluate("ds=>{calSel=ds;render();return document.querySelector('.daylist').innerText}",D(4))),'종일 일정이 다음 날에도 보임'
+    assert pg.evaluate('calSel')==D(3) and '10:30–12:00' in pg.inner_text('.daylist') and '10:30 점검 회의' in pg.inner_text('.calgrid .day.sel')
+    # 종일: 시각 칸과 길이 칩이 사라지고, 종료일은 포함된 날. 여러 날 일정
+    pg.click('.evbar .addbtn');idle(pg,200);title('휴가');pg.check(A('종일'));idle(pg,100)
+    assert not pg.is_visible(A('시작 시각')) and not pg.is_visible(A('종료 시각')) and not pg.is_visible('#askField .dur')
+    ok(pg);idle(pg,700);assert EV('휴가')==[D(3)+'T00:00',D(4)+'T00:00',True,''] and '휴가' not in daytext(4),'하루짜리 종일 일정이 다음 날에도 보임'
+    daytext(3);pg.click('.evbar .addbtn');idle(pg,200);title('출장');pg.check(A('종일'));setv('종료 날짜',D(5));fill_loc=pg.fill('#askField .fields > input >> nth=1','부산');ok(pg);idle(pg,700)
+    assert EV('출장')==[D(3)+'T00:00',D(6)+'T00:00',True,'부산'],EV('출장')
+    for k in (3,4,5):assert '출장' in daytext(k) and '~' in daytext(k),k
+    assert '출장' not in daytext(6)
+    # 종일을 껐다 켜기: 끄면 시각이 채워지고, 종료일을 시작일보다 앞으로 잡을 수 없다
+    daytext(3);pg.click('.evbar .addbtn');idle(pg,200);pg.check(A('종일'));pg.uncheck(A('종일'));idle(pg,100);assert val('시작 시각')!='' and val('종료 시각')!='' and pg.is_visible(A('종료 시각'))
+    pg.check(A('종일'));setv('종료 날짜',D(1));assert val('종료 날짜')==D(3);pg.click('#askCancel');idle(pg,200)
     # 제목·날짜 없이 만들 수 없다
-    pg.evaluate("ds=>{calSel=ds;render()}",D(3));n0=pg.evaluate('__EVENTS.length');pg.click('.evbar .addbtn');idle(pg,200);fld('제목','  ');ok(pg);idle(pg,400);assert pg.evaluate('__EVENTS.length')==n0
-    pg.click('.evbar .addbtn');idle(pg,200);fld('제목','날짜 없음');fld('날짜','');ok(pg);idle(pg,400);assert pg.evaluate('__EVENTS.length')==n0 and '실패' not in pg.inner_text('#toast')
-    # 고치기: 제목·장소만 바꾸면 날짜·시각은 보내지 않는다 (여러 날 일정이 줄어들지 않게)
-    pg.evaluate("ds=>{__EVENTS.push({id:'multi',cal:'c1',calName:'기본',color:'#4a86c5',title:'출장',allDay:true,start:ds+'T00:00',end:addDays(ds,3)+'T00:00',location:'',desc:''});gcal.invalidate();render()}",D(3));idle(pg,700)
-    assert '출장' in pg.inner_text('.daylist');pg.click('.daylist .evrow:has-text("출장")');idle(pg,200);assert fval('길이')=='0'
-    fld('제목','부산 출장');fld('장소','부산');ok(pg);idle(pg,700);assert EV('부산 출장')==[D(3)+'T00:00',D(6)+'T00:00',True,'부산'],EV('부산 출장')
-    assert '"date"' not in pg.evaluate('__GLOG[__GLOG.length-1]')
-    for k in (3,4,5):assert '부산 출장' in pg.evaluate("ds=>{calSel=ds;render();return document.querySelector('.daylist').innerText}",D(k)),k
-    assert '부산 출장' not in pg.evaluate("ds=>{calSel=ds;render();return document.querySelector('.daylist').innerText}",D(6))
-    # 고치기: 시각·길이·날짜를 바꾸면 그대로 반영, 종일 ↔ 시각 전환
-    pg.evaluate("ds=>{calSel=ds;render()}",D(3));pg.click('.daylist .evrow:has-text("점검 회의")');idle(pg,200);assert fval('시작')=='10:30' and fval('길이')=='90'
-    fld('시작','23:30');fld('길이','60','sel');fld('날짜',D(4));ok(pg);idle(pg,700);assert EV('점검 회의')==[D(4)+'T23:30',D(5)+'T00:30',False,''],EV('점검 회의')
-    assert pg.evaluate('calSel')==D(4) and '점검 회의' in pg.inner_text('.daylist')
-    pg.click('.daylist .evrow:has-text("점검 회의")');idle(pg,200);fld('길이','0','sel');ok(pg);idle(pg,700);assert EV('점검 회의')==[D(4)+'T00:00',D(5)+'T00:00',True,'']
-    pg.click('.daylist .evrow:has-text("점검 회의")');idle(pg,200);fld('시작','08:00');fld('길이','30','sel');ok(pg);idle(pg,700);assert EV('점검 회의')==[D(4)+'T08:00',D(4)+'T08:30',False,'']
+    n0=pg.evaluate('__EVENTS.length');pg.click('.evbar .addbtn');idle(pg,200);title('  ');ok(pg);idle(pg,400);assert pg.evaluate('__EVENTS.length')==n0
+    pg.click('.evbar .addbtn');idle(pg,200);title('날짜 없음');pg.fill(A('시작 날짜'),'');ok(pg);idle(pg,400);assert pg.evaluate('__EVENTS.length')==n0 and '실패' not in pg.inner_text('#toast')
+    # 고치기: 제목·장소만 바꾸면 날짜·시각은 보내지 않는다
+    daytext(3);pg.click('.daylist .evrow:has-text("출장")');idle(pg,200);assert pg.is_checked(A('종일')) and [val('시작 날짜'),val('종료 날짜')]==[D(3),D(5)]
+    title('부산 출장');ok(pg);idle(pg,700);assert EV('부산 출장')==[D(3)+'T00:00',D(6)+'T00:00',True,'부산'] and '"date"' not in pg.evaluate('__GLOG[__GLOG.length-1]')
+    # 고치기: 기간 줄이기·늘리기, 시작을 옮기면 기간이 따라감
+    daytext(3);pg.click('.daylist .evrow:has-text("부산 출장")');idle(pg,200);setv('종료 날짜',D(3));ok(pg);idle(pg,700);assert EV('부산 출장')==[D(3)+'T00:00',D(4)+'T00:00',True,'부산'],EV('부산 출장')
+    pg.click('.daylist .evrow:has-text("부산 출장")');idle(pg,200);setv('종료 날짜',D(4));setv('시작 날짜',D(8));assert val('종료 날짜')==D(9);ok(pg);idle(pg,700)
+    assert EV('부산 출장')==[D(8)+'T00:00',D(10)+'T00:00',True,'부산'] and pg.evaluate('calSel')==D(8)
+    # 고치기: 시각 일정의 종료를 직접 바꾸기, 자정을 넘기기, 종일 ↔ 시각 전환
+    daytext(3);pg.click('.daylist .evrow:has-text("점검 회의")');idle(pg,200);assert [val('시작 시각'),val('종료 시각')]==['10:30','12:00']
+    setv('종료 시각','12:20');ok(pg);idle(pg,700);assert EV('점검 회의')==[D(3)+'T10:30',D(3)+'T12:20',False,'']
+    pg.click('.daylist .evrow:has-text("점검 회의")');idle(pg,200);setv('시작 시각','23:30');assert [val('종료 날짜'),val('종료 시각')]==[D(4),'01:20'];setv('종료 시각','00:30');ok(pg);idle(pg,700)
+    assert EV('점검 회의')==[D(3)+'T23:30',D(4)+'T00:30',False,''] and '점검 회의' in daytext(4) and '점검 회의' in daytext(3)
+    daytext(3);pg.click('.daylist .evrow:has-text("점검 회의")');idle(pg,200);pg.check(A('종일'));ok(pg);idle(pg,700);assert EV('점검 회의')==[D(3)+'T00:00',D(5)+'T00:00',True,'']
+    daytext(3);pg.click('.daylist .evrow:has-text("점검 회의")');idle(pg,200);pg.uncheck(A('종일'));setv('종료 날짜',D(3));setv('시작 시각','08:00');setv('종료 시각','08:30');ok(pg);idle(pg,700);assert EV('점검 회의')==[D(3)+'T08:00',D(3)+'T08:30',False,''],EV('점검 회의')
     # 다른 날로 옮기기: 시각과 길이를 지킨다. 여러 날 종일 일정도 길이를 지킨다
     pg.evaluate("ds=>moveEventTo(__EVENTS.find(e=>e.title==='점검 회의'),ds)",D(6));idle(pg,700);assert EV('점검 회의')==[D(6)+'T08:00',D(6)+'T08:30',False,''] and pg.evaluate('calSel')==D(6)
-    pg.evaluate("ds=>moveEventTo(__EVENTS.find(e=>e.title==='부산 출장'),ds)",D(8));idle(pg,700);assert EV('부산 출장')==[D(8)+'T00:00',D(11)+'T00:00',True,'부산'],EV('부산 출장')
+    pg.evaluate("ds=>moveEventTo(__EVENTS.find(e=>e.title==='부산 출장'),ds)",D(11));idle(pg,700);assert EV('부산 출장')==[D(11)+'T00:00',D(13)+'T00:00',True,'부산'],EV('부산 출장')
+    # 달력: 여러 날 일정은 이어진 띠 (첫날 ms, 끝날 me, 가운데는 글자 없이)
+    pg.evaluate("ds=>{__EVENTS.push({id:'bar',cal:'c1',calName:'기본',color:'#4a86c5',title:'띠 일정',allDay:true,start:ds+'T00:00',end:addDays(ds,3)+'T00:00',location:'',desc:''});gcal.invalidate();calSel=ds;calMonth=ds.slice(0,7);render()}",td);idle(pg,700)
+    cells=pg.evaluate("ds=>[0,1,2,3].map(k=>{const c=document.querySelector(`.calgrid .day[data-ds=\"${addDays(ds,k)}\"]`);const b=c&&[...c.querySelectorAll('.it.multi')].find(x=>x.title.startsWith('띠 일정'));return b?[b.classList.contains('ms'),b.classList.contains('me'),b.textContent.trim()]:null})",td)
+    vis=[c for c in cells if c is not None]   # 달이 바뀌면 일부 칸은 다음 달 화면에 있다
+    assert cells[3] is None and vis and vis[0][0] and vis[0][2]=='띠 일정' and all(c[2] in ('','띠 일정') for c in vis),cells
+    assert len(vis)<3 or (vis[2][1] and not vis[1][0] and not vis[1][1]),cells
+    # 달력: 빈 곳을 끌면 그 기간의 종일 일정 창이 열린다. 한 칸만 누르면 날짜 고르기, Esc 는 취소
+    pg.evaluate("ds=>{calSel=ds;calMonth=ds.slice(0,7);render()}",td);idle(pg,400)
+    days=pg.evaluate("[...document.querySelectorAll('.calgrid .day')].map(c=>c.dataset.ds)");a,b=days[8],days[11]
+    box=lambda ds:pg.locator(f'.calgrid .day[data-ds="{ds}"]').bounding_box()
+    def drag(x,y,release=True):
+        bx,by=box(x),box(y);pg.mouse.move(bx['x']+bx['width']-6,bx['y']+bx['height']-6);pg.mouse.down();pg.mouse.move(by['x']+by['width']-6,by['y']+by['height']-6,steps=6)
+        if release:pg.mouse.up()
+    drag(a,b,False);assert pg.locator('.calgrid .day.range').count()==4;pg.mouse.up();idle(pg,300)
+    assert pg.is_visible('#ask.on') and pg.is_checked(A('종일')) and [val('시작 날짜'),val('종료 날짜')]==[a,b];title('끌어서 만든 일정');ok(pg);idle(pg,700)
+    assert EV('끌어서 만든 일정')==[a+'T00:00',pg.evaluate('d=>addDays(d,1)',b)+'T00:00',True,''] and pg.locator('.calgrid .day.range').count()==0
+    drag(b,a);idle(pg,300);assert pg.is_visible('#ask.on') and [val('시작 날짜'),val('종료 날짜')]==[a,b],'거꾸로 끌어도 같은 기간';pg.click('#askCancel');idle(pg,200)
+    drag(a,b,False);pg.keyboard.press('Escape');pg.mouse.up();idle(pg,300);assert not pg.is_visible('#ask.on') and pg.locator('.calgrid .day.range').count()==0
+    pg.click(f'.calgrid .day[data-ds="{a}"] .dn');idle(pg,300);assert pg.evaluate('calSel')==a and not pg.is_visible('#ask.on')
     # 검색 → 고르면 그 날짜로
-    pg.fill('.evbar input[type=search]','출장');pg.press('.evbar input[type=search]','Enter');idle(pg,600);assert '검색 결과 · 1건' in pg.inner_text('.daylist');pg.click('.daylist .evrow');idle(pg,500);assert pg.evaluate('calSel')==D(8)
+    pg.fill('.evbar input[type=search]','출장');pg.press('.evbar input[type=search]','Enter');idle(pg,600);assert '검색 결과 · 1건' in pg.inner_text('.daylist');pg.click('.daylist .evrow');idle(pg,500);assert pg.evaluate('calSel')==D(11)
     # 지우기: 묻고 나서 지운다
-    pg.click('.daylist .evrow:has-text("부산 출장") .x');idle(pg,200);assert '부산 출장' in pg.inner_text('#askMsg');pg.click('#askCancel');idle(pg,300);assert EV('부산 출장')
+    pg.click('.daylist .evrow:has-text("부산 출장") .x');idle(pg,200);assert '부산 출장' in pg.inner_text('#askMsg') and '~' in pg.inner_text('#askMsg');pg.click('#askCancel');idle(pg,300);assert EV('부산 출장')
     pg.click('.daylist .evrow:has-text("부산 출장") .x');idle(pg,200);ok(pg);idle(pg,700);assert EV('부산 출장') is None and '부산 출장' not in pg.inner_text('#main')
-    # 할 일 탭의 오늘 상자: 오늘 일정이 보이고, 여기서 만든 일정도 바로 보인다
-    tab(pg,'할 일');idle(pg,500);assert '주간 회의' in pg.inner_text('.tdbox, .tdtoday') if pg.locator('.tdbox, .tdtoday').count() else True
-    # 달 넘기기와 오늘로 돌아오기, 달력에 할 일도 같이 보인다
-    tab(pg,'일정');m0=pg.inner_text('.calh h2');pg.click('.calh button:text-is("›")');idle(pg,500);assert pg.inner_text('.calh h2')!=m0 and pg.locator('.calgrid .day').count()==42
+    # 달 넘기기와 오늘로 돌아오기
+    pg.click('.calh button:text-is("오늘")');idle(pg,400);m0=pg.inner_text('.calh h2');pg.click('.calh button:text-is("›")');idle(pg,500);assert pg.inner_text('.calh h2')!=m0 and pg.locator('.calgrid .day').count()==42
     pg.click('.calh button:text-is("‹")');pg.click('.calh button:text-is("‹")');idle(pg,500);pg.click('.calh button:text-is("오늘")');idle(pg,500);assert pg.inner_text('.calh h2')==m0 and pg.evaluate('calSel')==td
-    for t0 in ['점검 회의','휴가']:pg.evaluate("t=>{const i=__EVENTS.findIndex(e=>e.title===t);if(i>=0)__EVENTS.splice(i,1)}",t0)
+    shot(pg,'19-calendar')
+    for t0 in ['점검 회의','휴가','띠 일정','끌어서 만든 일정']:pg.evaluate("t=>{const i=__EVENTS.findIndex(e=>e.title===t);if(i>=0)__EVENTS.splice(i,1)}",t0)
     pg.evaluate('gcal.invalidate();render()');idle(pg,500)
 
 def t_settings(pg):

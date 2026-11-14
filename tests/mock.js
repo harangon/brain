@@ -53,12 +53,12 @@ window.fetch=async(url,opt)=>{const b=JSON.parse(opt.body);let out={};
   else if(b.action==='search')out={events:__EVENTS.filter(e=>e.title.includes(b.q))};
   else if(b.action==='create'){const t=String(b.title||'').trim();if(!t)out={error:'title required'};else if(isNaN(new Date(b.date+'T00:00:00')))out={error:'Invalid Date'};
     else{const ev={id:'m'+(++__evseq),cal:b.cal||'c1',calName:'기본',color:'#4a86c5',title:t,location:'',desc:b.desc||'',allDay:!b.time};
-      if(!b.time){ev.start=b.date+'T00:00';ev.end=__addD(b.date,1)+'T00:00';}else{ev.start=b.date+'T'+b.time;ev.end=__addMin(ev.start,Number(b.minutes)||60);}
+      ev.location=b.location||'';if(!b.time){ev.start=b.date+'T00:00';ev.end=__addD(b.endDate&&b.endDate>b.date?b.endDate:b.date,1)+'T00:00';}else{ev.start=b.date+'T'+b.time;const e2=b.endDate&&b.endTime?b.endDate+'T'+b.endTime:'';ev.end=e2&&e2>ev.start?e2:__addMin(ev.start,Number(b.minutes)||60);}
       __EVENTS.push(ev);__GLOG.push('create '+t);out={event:ev};}}
   else if(b.action==='update'){const ev=__EVENTS.find(e=>e.id===b.id);if(!ev)out={error:'event not found'};else{
       if(b.title!==undefined)ev.title=String(b.title);if(b.location!==undefined)ev.location=String(b.location);
-      if(b.date){if(b.allDay||!b.time){const days=ev.allDay?Math.max(1,Math.round((new Date(ev.end)-new Date(ev.start))/864e5)):1;ev.allDay=true;ev.start=b.date+'T00:00';ev.end=__addD(b.date,days)+'T00:00';}
-        else{const mins=Number(b.minutes)||Math.round((new Date(ev.end)-new Date(ev.start))/6e4)||60;ev.allDay=false;ev.start=b.date+'T'+b.time;ev.end=__addMin(ev.start,mins);}}
+      if(b.date){if(b.allDay||!b.time){const days=b.endDate&&b.endDate>=b.date?Math.round((new Date(b.endDate+'T00:00Z')-new Date(b.date+'T00:00Z'))/864e5)+1:(ev.allDay?Math.max(1,Math.round((new Date(ev.end)-new Date(ev.start))/864e5)):1);ev.allDay=true;ev.start=b.date+'T00:00';ev.end=__addD(b.date,days)+'T00:00';}
+        else{const mins=Number(b.minutes)||Math.round((new Date(ev.end)-new Date(ev.start))/6e4)||60;const st=b.date+'T'+b.time;const e2=b.endDate&&b.endTime?b.endDate+'T'+b.endTime:'';ev.allDay=false;ev.start=st;ev.end=e2&&e2>st?e2:__addMin(st,mins);}}
       __GLOG.push('update '+ev.title+' '+JSON.stringify(b));out={event:ev};}}
   else if(b.action==='delete'){const i=__EVENTS.findIndex(e=>e.id===b.id);if(i<0)out={error:'event not found'};else{__GLOG.push('delete '+__EVENTS[i].title);__EVENTS.splice(i,1);out={ok:true};}}
   else out={error:'unknown action'};

@@ -12,8 +12,10 @@
  *   {key, action:"calendars"}
  *   {key, action:"list", from:"2026-11-01", to:"2026-12-01", cals:"id1,id2"}
  *   {key, action:"search", q:"치과", cals:"…"}
- *   {key, action:"create", cal, title, date, time?, minutes?, desc?}
- *   {key, action:"update", cal, id, origDate, title?, date?, time?, minutes?, allDay?, location?}
+ *   {key, action:"create", cal, title, date, time?, endDate?, endTime?, minutes?, desc?, location?}
+ *   {key, action:"update", cal, id, origDate, title?, location?, date?, allDay?, time?, endDate?, endTime?, minutes?}
+ *     기간: 시작 = date(+time), 종료 = endDate(+endTime). 종일 일정의 endDate 는 포함된 마지막 날.
+ *     endDate/endTime 이 없으면 minutes(길이)로, 그것도 없으면 1시간(종일은 하루)로 잡는다.
  *   {key, action:"delete", cal, id, origDate}
  */
 var KEY = 'CHANGE-ME-to-a-long-random-string';
@@ -91,13 +93,16 @@ function create_(p) {
   var cal = p.cal ? CalendarApp.getCalendarById(p.cal) : CalendarApp.getDefaultCalendar();
   if (!cal) return { error: 'calendar not found' };
   var title = String(p.title || '').trim(); if (!title) return { error: 'title required' };
-  var ev;
+  var ev, opts = { description: p.desc || '', location: p.location || '' };
   if (!p.time) {
-    ev = cal.createAllDayEvent(title, new Date(p.date + 'T00:00:00'), { description: p.desc || '' });
+    var s0 = new Date(p.date + 'T00:00:00');
+    if (p.endDate && p.endDate > p.date) ev = cal.createAllDayEvent(title, s0, new Date(new Date(p.endDate + 'T00:00:00').getTime() + 86400000), opts);
+    else ev = cal.createAllDayEvent(title, s0, opts);
   } else {
     var start = new Date(p.date + 'T' + p.time + ':00');
-    var end = new Date(start.getTime() + (Number(p.minutes) || 60) * 60000);
-    ev = cal.createEvent(title, start, end, { description: p.desc || '' });
+    var end = (p.endDate && p.endTime) ? new Date(p.endDate + 'T' + p.endTime + ':00') : null;
+    if (!end || isNaN(end.getTime()) || end <= start) end = new Date(start.getTime() + (Number(p.minutes) || 60) * 60000);
+    ev = cal.createEvent(title, start, end, opts);
   }
   return { event: fmt_(ev, cal) };
 }
@@ -119,16 +124,20 @@ function update_(p) {
   if (p.location !== undefined) ev.setLocation(String(p.location));
   if (p.date) {
     if (p.allDay || !p.time) {
-      // 여러 날짜에 걸친 종일 일정은 길이를 지킨 채 옮긴다
+      // 종료일(포함)이 오면 그 기간으로, 없으면 원래 길이를 지킨 채 옮긴다
       var d0 = new Date(p.date + 'T00:00:00'), days = 1;
-      try { if (ev.isAllDayEvent()) days = Math.max(1, Math.round((ev.getAllDayEndDate() - ev.getAllDayStartDate()) / 86400000)); } catch (err) { days = 1; }
+      if (p.endDate && p.endDate >= p.date) days = Math.round((new Date(p.endDate + 'T00:00:00') - d0) / 86400000) + 1;
+      else { try { if (ev.isAllDayEvent()) days = Math.max(1, Math.round((ev.getAllDayEndDate() - ev.getAllDayStartDate()) / 86400000)); } catch (err) { days = 1; } }
       if (days > 1) { try { ev.setAllDayDates(d0, new Date(d0.getTime() + days * 86400000)); } catch (err) { ev.setAllDayDate(d0); } }
       else ev.setAllDayDate(d0);
-    }
-    else {
+    } else {
       var start = new Date(p.date + 'T' + p.time + ':00');
-      var minutes = Number(p.minutes) || Math.round((ev.getEndTime() - ev.getStartTime()) / 60000) || 60;
-      ev.setTime(start, new Date(start.getTime() + minutes * 60000));
+      var end = (p.endDate && p.endTime) ? new Date(p.endDate + 'T' + p.endTime + ':00') : null;
+      if (!end || isNaN(end.getTime()) || end <= start) {
+        var minutes = Number(p.minutes) || Math.round((ev.getEndTime() - ev.getStartTime()) / 60000) || 60;
+        end = new Date(start.getTime() + minutes * 60000);
+      }
+      ev.setTime(start, end);
     }
   }
   return { event: fmt_(ev, cal), recurring: ev.isRecurringEvent() };
